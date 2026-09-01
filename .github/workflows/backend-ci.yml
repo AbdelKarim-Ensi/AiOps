@@ -11,10 +11,18 @@ on:
     paths:
       - "apps/backend/**"
 
-env:
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/aiops-backend
-
 jobs:
+ 
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      image_name: ${{ steps.vars.outputs.image_name }}
+    steps:
+      - name: Convertir le nom du repo en minuscules
+        id: vars
+        run: echo "image_name=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/aiops-backend" >> "$GITHUB_OUTPUT"
+
+  
   lint-build-test:
     runs-on: ubuntu-latest
     defaults:
@@ -47,9 +55,11 @@ jobs:
       - name: Tests unitaires
         run: npm run test
 
+  
   docker-build-push:
     needs: lint-build-test
     runs-on: ubuntu-latest
+    
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     permissions:
