@@ -15,10 +15,10 @@ __pycache__/
 .terraform/
 *.tfstate
 *.tfstate.backup
-.terraform.lock.hcl
 
 # Kubernetes (kubeconfig local, ne jamais committer)
 kubeconfig*.yaml
+*-config
 
 # Logs et fichiers système
 *.log
