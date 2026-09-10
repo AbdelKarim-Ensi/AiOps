@@ -96,4 +96,4 @@ jobs:
       - name: Redéployer sur le cluster kind
         run: |
           kubectl set image deployment/api api=${{ needs.docker-build-push.outputs.image_name }}:${{ github.sha }} -n aiops
-          kubectl rollout status deployment/api -n aiops --timeout=60s
+          kubectl rollout status deployment/api -n aiops --timeout=600s
