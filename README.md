@@ -93,3 +93,90 @@ aiops-platform/
 - [ ] Phase 10 — Dashboard frontend
 - [ ] Phase 11 — Alerting
 - [ ] Phase 12 — Documentation finale
+
+```
+AiOps
+├─ README.md
+├─ apps
+│  ├─ backend
+│  │  ├─ .dockerignore
+│  │  ├─ .eslintrc.js
+│  │  ├─ .prettierrc
+│  │  ├─ Dockerfile
+│  │  ├─ README.md
+│  │  ├─ nest-cli.json
+│  │  ├─ package-lock.json
+│  │  ├─ package.json
+│  │  ├─ prisma
+│  │  │  ├─ migrations
+│  │  │  │  ├─ 20260831222244_init
+│  │  │  │  │  └─ migration.sql
+│  │  │  │  └─ migration_lock.toml
+│  │  │  └─ schema.prisma
+│  │  ├─ src
+│  │  │  ├─ anomalies
+│  │  │  │  └─ dto
+│  │  │  ├─ app.controller.spec.ts
+│  │  │  ├─ app.controller.ts
+│  │  │  ├─ app.module.ts
+│  │  │  ├─ app.service.ts
+│  │  │  ├─ common
+│  │  │  │  └─ health.controller.ts
+│  │  │  ├─ main.ts
+│  │  │  ├─ prisma
+│  │  │  │  ├─ prisma.module.ts
+│  │  │  │  └─ prisma.service.ts
+│  │  │  └─ tasks
+│  │  │     ├─ dto
+│  │  │     │  ├─ create-task.dto.ts
+│  │  │     │  └─ update-task.dto.ts
+│  │  │     ├─ tasks.controller.ts
+│  │  │     ├─ tasks.module.ts
+│  │  │     └─ tasks.service.ts
+│  │  ├─ test
+│  │  │  ├─ app.e2e-spec.ts
+│  │  │  └─ jest-e2e.json
+│  │  ├─ tsconfig.build.json
+│  │  └─ tsconfig.json
+│  ├─ frontend
+│  │  ├─ public
+│  │  └─ src
+│  │     ├─ components
+│  │     ├─ pages
+│  │     └─ services
+│  └─ ml-service
+│     ├─ app
+│     ├─ model
+│     └─ scripts
+├─ desktop.ini
+├─ docker-compose.yml
+├─ docs
+│  └─ architecture
+├─ infra
+│  ├─ k8s
+│  │  ├─ base
+│  │  │  ├─ api
+│  │  │  ├─ frontend
+│  │  │  ├─ ingress
+│  │  │  ├─ ml-service
+│  │  │  └─ postgres
+│  │  ├─ nginx-deployment.yaml
+│  │  ├─ nginx-service.yaml
+│  │  └─ observability
+│  │     ├─ alertmanager
+│  │     ├─ grafana
+│  │     ├─ grafana-alloy
+│  │     ├─ loki
+│  │     └─ prometheus
+│  └─ terraform
+│     ├─ environments
+│     │  └─ local
+│     └─ modules
+│        └─ kind-cluster
+│           ├─ .terraform.lock.hcl
+│           ├─ main.tf
+│           ├─ outputs.tf
+│           └─ variables.tf
+└─ scripts
+
+```
