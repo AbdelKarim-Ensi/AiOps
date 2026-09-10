@@ -1,3 +1,5 @@
+
+
 name: Backend CI/CD
 
 
@@ -57,6 +59,9 @@ jobs:
       contents: read
       packages: write
 
+    outputs:
+      image_name: ${{ steps.vars.outputs.image_name }}
+
     steps:
       - name: Checkout du code
         uses: actions/checkout@v4
@@ -82,3 +87,13 @@ jobs:
           tags: |
             ${{ steps.vars.outputs.image_name }}:latest
             ${{ steps.vars.outputs.image_name }}:${{ github.sha }}
+
+  deploy:
+    needs: docker-build-push
+    runs-on: self-hosted
+
+    steps:
+      - name: Redéployer sur le cluster kind
+        run: |
+          kubectl set image deployment/api api=${{ needs.docker-build-push.outputs.image_name }}:${{ github.sha }} -n aiops
+          kubectl rollout status deployment/api -n aiops --timeout=60s
