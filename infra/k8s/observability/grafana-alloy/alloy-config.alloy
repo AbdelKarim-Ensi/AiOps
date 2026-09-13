@@ -1,0 +1,40 @@
+discovery.kubernetes "pods" {
+  role = "pod"
+}
+
+discovery.relabel "aiops_only" {
+  targets = discovery.kubernetes.pods.targets
+
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    regex         = "aiops"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_name"]
+    target_label  = "pod"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    target_label  = "namespace"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_container_name"]
+    target_label  = "container"
+  }
+}
+
+loki.source.kubernetes "pods_logs" {
+  targets    = discovery.relabel.aiops_only.output
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki-gateway.observability.svc.cluster.local/loki/api/v1/push"
+    tenant_id = "aiops"
+  }
+}
