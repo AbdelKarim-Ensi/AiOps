@@ -1,1 +1,1 @@
-apps/ml-service/model/*.joblib
+model/*.joblib
