@@ -23,10 +23,7 @@ def loki_logs_to_dataframe(logs: list[dict]) -> pd.DataFrame:
     if not records:
         # DataFrame vide mais avec les colonnes attendues, pour que
         # build_features() ne plante pas sur une fenêtre sans données
-        return pd.DataFrame(columns=["level", "time", "req", "timestamp"]).set_index(
-            pd.DatetimeIndex([], name="timestamp")
-        ).reset_index()
-
+        return pd.DataFrame(columns=["level", "time", "req", "timestamp"])
     df = pd.DataFrame(records)
     df["timestamp"] = pd.to_datetime(df["time"], unit="ms")
     return df

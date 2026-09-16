@@ -4,6 +4,7 @@ from app.loki_client import fetch_recent_logs
 from app.features.loki_adapter import loki_logs_to_dataframe
 from app.features.feature_engineering import build_features
 from app.predict import predict_anomalies
+from app.backend_client import send_anomalies_to_backend
 
 async def main():
     since_ns = time.time_ns() - (10 * 60 * 1_000_000_000)
@@ -13,8 +14,12 @@ async def main():
 
     df = loki_logs_to_dataframe(logs)
     features = build_features(df)
-
     predictions = predict_anomalies(features)
     print(predictions.to_string())
+
+    created = await send_anomalies_to_backend(predictions)
+    print(f"\n{len(created)} anomalies envoyées au backend")
+    for anomaly in created:
+        print(anomaly)
 
 asyncio.run(main())
