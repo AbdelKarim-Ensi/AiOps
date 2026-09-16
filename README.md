@@ -180,3 +180,307 @@ AiOps
 └─ scripts
 
 ```
+```
+AiOps
+├─ README.md
+├─ apps
+│  ├─ backend
+│  │  ├─ .dockerignore
+│  │  ├─ .eslintrc.js
+│  │  ├─ .prettierrc
+│  │  ├─ Dockerfile
+│  │  ├─ README.md
+│  │  ├─ nest-cli.json
+│  │  ├─ package-lock.json
+│  │  ├─ package.json
+│  │  ├─ prisma
+│  │  │  ├─ migrations
+│  │  │  │  ├─ 20260831222244_init
+│  │  │  │  │  └─ migration.sql
+│  │  │  │  └─ migration_lock.toml
+│  │  │  └─ schema.prisma
+│  │  ├─ src
+│  │  │  ├─ anomalies
+│  │  │  │  └─ dto
+│  │  │  ├─ app.controller.spec.ts
+│  │  │  ├─ app.controller.ts
+│  │  │  ├─ app.module.ts
+│  │  │  ├─ app.service.ts
+│  │  │  ├─ common
+│  │  │  │  └─ health.controller.ts
+│  │  │  ├─ main.ts
+│  │  │  ├─ prisma
+│  │  │  │  ├─ prisma.module.ts
+│  │  │  │  └─ prisma.service.ts
+│  │  │  └─ tasks
+│  │  │     ├─ dto
+│  │  │     │  ├─ create-task.dto.ts
+│  │  │     │  └─ update-task.dto.ts
+│  │  │     ├─ tasks.controller.ts
+│  │  │     ├─ tasks.module.ts
+│  │  │     └─ tasks.service.ts
+│  │  ├─ test
+│  │  │  ├─ app.e2e-spec.ts
+│  │  │  └─ jest-e2e.json
+│  │  ├─ tsconfig.build.json
+│  │  └─ tsconfig.json
+│  ├─ frontend
+│  │  ├─ public
+│  │  └─ src
+│  │     ├─ components
+│  │     ├─ pages
+│  │     └─ services
+│  └─ ml-service
+│     ├─ app
+│     ├─ model
+│     └─ scripts
+├─ desktop.ini
+├─ docker-compose.yml
+├─ docs
+│  └─ architecture
+├─ infra
+│  ├─ k8s
+│  │  ├─ base
+│  │  │  ├─ api
+│  │  │  │  ├─ configmap.yaml
+│  │  │  │  ├─ deployment.yaml
+│  │  │  │  ├─ secret.yaml
+│  │  │  │  └─ service.yaml
+│  │  │  ├─ frontend
+│  │  │  ├─ ingress
+│  │  │  │  └─ ingress.yaml
+│  │  │  ├─ ml-service
+│  │  │  ├─ namespace.yaml
+│  │  │  └─ postgres
+│  │  │     ├─ configmap.yaml
+│  │  │     ├─ secret.yaml
+│  │  │     ├─ service.yaml
+│  │  │     └─ statefulset.yaml
+│  │  ├─ nginx-deployment.yaml
+│  │  ├─ nginx-service.yaml
+│  │  └─ observability
+│  │     ├─ alertmanager
+│  │     ├─ grafana
+│  │     ├─ grafana-alloy
+│  │     ├─ loki
+│  │     └─ prometheus
+│  └─ terraform
+│     ├─ environments
+│     │  └─ local
+│     └─ modules
+│        └─ kind-cluster
+│           ├─ .terraform.lock.hcl
+│           ├─ main.tf
+│           ├─ outputs.tf
+│           └─ variables.tf
+└─ scripts
+
+```
+```
+AiOps
+├─ README.md
+├─ apps
+│  ├─ backend
+│  │  ├─ .dockerignore
+│  │  ├─ .eslintrc.js
+│  │  ├─ .prettierrc
+│  │  ├─ Dockerfile
+│  │  ├─ README.md
+│  │  ├─ nest-cli.json
+│  │  ├─ package-lock.json
+│  │  ├─ package.json
+│  │  ├─ prisma
+│  │  │  ├─ migrations
+│  │  │  │  ├─ 20260831222244_init
+│  │  │  │  │  └─ migration.sql
+│  │  │  │  └─ migration_lock.toml
+│  │  │  └─ schema.prisma
+│  │  ├─ src
+│  │  │  ├─ anomalies
+│  │  │  │  └─ dto
+│  │  │  ├─ app.controller.spec.ts
+│  │  │  ├─ app.controller.ts
+│  │  │  ├─ app.module.ts
+│  │  │  ├─ app.service.ts
+│  │  │  ├─ common
+│  │  │  │  └─ health.controller.ts
+│  │  │  ├─ main.ts
+│  │  │  ├─ prisma
+│  │  │  │  ├─ prisma.module.ts
+│  │  │  │  └─ prisma.service.ts
+│  │  │  └─ tasks
+│  │  │     ├─ dto
+│  │  │     │  ├─ create-task.dto.ts
+│  │  │     │  └─ update-task.dto.ts
+│  │  │     ├─ tasks.controller.ts
+│  │  │     ├─ tasks.module.ts
+│  │  │     └─ tasks.service.ts
+│  │  ├─ test
+│  │  │  ├─ app.e2e-spec.ts
+│  │  │  └─ jest-e2e.json
+│  │  ├─ tsconfig.build.json
+│  │  └─ tsconfig.json
+│  ├─ frontend
+│  │  ├─ public
+│  │  └─ src
+│  │     ├─ components
+│  │     ├─ pages
+│  │     └─ services
+│  └─ ml-service
+│     ├─ app
+│     ├─ model
+│     └─ scripts
+├─ desktop.ini
+├─ docker-compose.yml
+├─ docs
+│  └─ architecture
+│     └─ phase-6-observability.md
+├─ infra
+│  ├─ k8s
+│  │  ├─ base
+│  │  │  ├─ api
+│  │  │  │  ├─ configmap.yaml
+│  │  │  │  ├─ deployment.yaml
+│  │  │  │  ├─ secret.yaml
+│  │  │  │  └─ service.yaml
+│  │  │  ├─ frontend
+│  │  │  ├─ ingress
+│  │  │  │  └─ ingress.yaml
+│  │  │  ├─ ml-service
+│  │  │  ├─ namespace.yaml
+│  │  │  └─ postgres
+│  │  │     ├─ configmap.yaml
+│  │  │     ├─ secret.yaml
+│  │  │     ├─ service.yaml
+│  │  │     └─ statefulset.yaml
+│  │  ├─ nginx-deployment.yaml
+│  │  ├─ nginx-service.yaml
+│  │  └─ observability
+│  │     ├─ alertmanager
+│  │     ├─ grafana
+│  │     │  └─ values-grafana.yaml
+│  │     ├─ grafana-alloy
+│  │     │  └─ values-alloy.yaml
+│  │     ├─ install.sh
+│  │     ├─ loki
+│  │     │  └─ values-loki.yaml
+│  │     └─ prometheus
+│  └─ terraform
+│     ├─ environments
+│     │  └─ local
+│     └─ modules
+│        └─ kind-cluster
+│           ├─ .terraform.lock.hcl
+│           ├─ main.tf
+│           ├─ outputs.tf
+│           └─ variables.tf
+└─ scripts
+
+```
+```
+AiOps
+├─ README.md
+├─ apps
+│  ├─ backend
+│  │  ├─ .dockerignore
+│  │  ├─ .eslintrc.js
+│  │  ├─ .prettierrc
+│  │  ├─ Dockerfile
+│  │  ├─ README.md
+│  │  ├─ nest-cli.json
+│  │  ├─ package-lock.json
+│  │  ├─ package.json
+│  │  ├─ prisma
+│  │  │  ├─ migrations
+│  │  │  │  ├─ 20260831222244_init
+│  │  │  │  │  └─ migration.sql
+│  │  │  │  └─ migration_lock.toml
+│  │  │  └─ schema.prisma
+│  │  ├─ src
+│  │  │  ├─ anomalies
+│  │  │  │  └─ dto
+│  │  │  ├─ app.controller.spec.ts
+│  │  │  ├─ app.controller.ts
+│  │  │  ├─ app.module.ts
+│  │  │  ├─ app.service.ts
+│  │  │  ├─ common
+│  │  │  │  └─ health.controller.ts
+│  │  │  ├─ main.ts
+│  │  │  ├─ prisma
+│  │  │  │  ├─ prisma.module.ts
+│  │  │  │  └─ prisma.service.ts
+│  │  │  └─ tasks
+│  │  │     ├─ dto
+│  │  │     │  ├─ create-task.dto.ts
+│  │  │     │  └─ update-task.dto.ts
+│  │  │     ├─ tasks.controller.ts
+│  │  │     ├─ tasks.module.ts
+│  │  │     └─ tasks.service.ts
+│  │  ├─ test
+│  │  │  ├─ app.e2e-spec.ts
+│  │  │  └─ jest-e2e.json
+│  │  ├─ tsconfig.build.json
+│  │  └─ tsconfig.json
+│  ├─ frontend
+│  │  ├─ public
+│  │  └─ src
+│  │     ├─ components
+│  │     ├─ pages
+│  │     └─ services
+│  └─ ml-service
+│     ├─ app
+│     │  └─ features
+│     │     └─ feature_engineering.py
+│     ├─ data
+│     │  └─ simulated_logs.jsonl
+│     ├─ model
+│     ├─ requirements.txt
+│     └─ scripts
+│        └─ generate_logs.py
+├─ desktop.ini
+├─ docker-compose.yml
+├─ docs
+│  └─ architecture
+│     └─ phase-6-observability.md
+├─ infra
+│  ├─ k8s
+│  │  ├─ base
+│  │  │  ├─ api
+│  │  │  │  ├─ configmap.yaml
+│  │  │  │  ├─ deployment.yaml
+│  │  │  │  ├─ secret.yaml
+│  │  │  │  └─ service.yaml
+│  │  │  ├─ frontend
+│  │  │  ├─ ingress
+│  │  │  │  └─ ingress.yaml
+│  │  │  ├─ ml-service
+│  │  │  ├─ namespace.yaml
+│  │  │  └─ postgres
+│  │  │     ├─ configmap.yaml
+│  │  │     ├─ secret.yaml
+│  │  │     ├─ service.yaml
+│  │  │     └─ statefulset.yaml
+│  │  ├─ nginx-deployment.yaml
+│  │  ├─ nginx-service.yaml
+│  │  └─ observability
+│  │     ├─ alertmanager
+│  │     ├─ grafana
+│  │     │  └─ values-grafana.yaml
+│  │     ├─ grafana-alloy
+│  │     │  └─ values-alloy.yaml
+│  │     ├─ install.sh
+│  │     ├─ loki
+│  │     │  └─ values-loki.yaml
+│  │     └─ prometheus
+│  └─ terraform
+│     ├─ environments
+│     │  └─ local
+│     └─ modules
+│        └─ kind-cluster
+│           ├─ .terraform.lock.hcl
+│           ├─ main.tf
+│           ├─ outputs.tf
+│           └─ variables.tf
+└─ scripts
+
+```
