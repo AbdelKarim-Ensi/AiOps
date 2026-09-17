@@ -48,7 +48,7 @@ model Task {
 }
 model Anomaly {
   id                   String   @id @default(uuid())
-  windowStart          DateTime
+  windowStart          DateTime @unique
   windowEnd            DateTime
 
   totalLogs            Int

@@ -7,17 +7,22 @@ export class AnomaliesService {
   constructor(private readonly prisma: PrismaService) {}
 
   create(dto: CreateAnomalyDto) {
-    return this.prisma.anomaly.create({
-      data: {
-        windowStart: new Date(dto.windowStart),
-        windowEnd: new Date(dto.windowEnd),
-        totalLogs: dto.totalLogs,
-        errorCount: dto.errorCount,
-        distinctUrls: dto.distinctUrls,
-        simulateFailureCount: dto.simulateFailureCount,
-        errorRate: dto.errorRate,
-        anomalyScore: dto.anomalyScore,
-      },
+    const windowStart = new Date(dto.windowStart);
+    const data = {
+      windowStart,
+      windowEnd: new Date(dto.windowEnd),
+      totalLogs: dto.totalLogs,
+      errorCount: dto.errorCount,
+      distinctUrls: dto.distinctUrls,
+      simulateFailureCount: dto.simulateFailureCount,
+      errorRate: dto.errorRate,
+      anomalyScore: dto.anomalyScore,
+    };
+
+    return this.prisma.anomaly.upsert({
+      where: { windowStart },
+      create: data,
+      update: data,
     });
   }
 
