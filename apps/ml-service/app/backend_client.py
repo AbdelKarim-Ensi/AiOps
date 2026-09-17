@@ -1,9 +1,8 @@
+import os
 import httpx
 import pandas as pd
 
-# En dev local : http://localhost:3000
-# En cluster K8s (Phase 8 étape 4) : http://api-service.aiops.svc.cluster.local:3000
-BACKEND_URL = "http://localhost:3000"
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:3000")
 
 
 async def send_anomalies_to_backend(predictions_df: pd.DataFrame) -> list[dict]:
@@ -25,16 +24,26 @@ async def send_anomalies_to_backend(predictions_df: pd.DataFrame) -> list[dict]:
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         for _, row in anomalies.iterrows():
-            # La fenêtre fait "window" minutes ; on la déduit du timestamp
-            # de début + la durée de resample utilisée dans build_features().
-            # Ici on suppose des fenêtres de 5 minutes (à ajuster si `window`
-            # devient un paramètre variable plus tard).
+
             window_start = row["timestamp"]
             window_end = window_start + pd.Timedelta(minutes=5)
 
+            # AJOUT : on force le fuseau UTC explicitement avant isoformat().
+            # Sans ça, un timestamp naive ("2026-09-17T15:20:00" sans offset)
+            # est réinterprété par Node/Prisma comme heure locale du serveur,
+            # ce qui décale windowStart/windowEnd du fuseau local (ex: -1h en CET).
+            window_start_utc = (
+                window_start.tz_localize("UTC") if window_start.tzinfo is None
+                else window_start.tz_convert("UTC")
+            )
+            window_end_utc = (
+                window_end.tz_localize("UTC") if window_end.tzinfo is None
+                else window_end.tz_convert("UTC")
+            )
+
             payload = {
-                "windowStart": window_start.isoformat(),
-                "windowEnd": window_end.isoformat(),
+                "windowStart": window_start_utc.isoformat(),
+                "windowEnd": window_end_utc.isoformat(),
                 "totalLogs": int(row["total_logs"]),
                 "errorCount": int(row["error_count"]),
                 "distinctUrls": int(row["distinct_urls"]),

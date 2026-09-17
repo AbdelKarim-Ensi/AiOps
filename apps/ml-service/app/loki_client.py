@@ -1,15 +1,12 @@
-# app/loki_client.py
+import os
 import httpx
 import json
 import time
 from datetime import datetime, timezone
 
-LOKI_URL = "http://localhost:3100"  # via port-forward en dev ; deviendra
-                                      # http://loki.observability.svc.cluster.local:3100 en cluster
-TENANT_ID = "aiops"
-NAMESPACE_QUERY = '{namespace="aiops", container="api"}'  # exclut postgres, cible l'app
-
-
+LOKI_URL = os.environ.get("LOKI_URL", "http://localhost:3100")
+TENANT_ID = os.environ.get("LOKI_TENANT_ID", "aiops")
+NAMESPACE_QUERY = os.environ.get("LOKI_QUERY", '{namespace="aiops", container="api"}')
 def _is_health_probe(parsed_log: dict) -> bool:
     """
     Détecte les requêtes de liveness/readiness probe kube-probe
