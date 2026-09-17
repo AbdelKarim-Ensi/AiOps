@@ -1,22 +1,88 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import joblib
-import pandas as pd
+import asyncio
+import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-MODEL_PATH = Path("model/isolation_forest.joblib")
+import joblib
+import pandas as pd
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
-app = FastAPI(title="AiOps ML Service", version="0.1.0")
+from app.loki_client import fetch_recent_logs
+from app.features.loki_adapter import loki_logs_to_dataframe
+from app.features.feature_engineering import build_features
+from app.predict import predict_anomalies
+from app.backend_client import send_anomalies_to_backend
+
+MODEL_PATH = Path("model/isolation_forest.joblib")
+POLL_INTERVAL_SECONDS = 10
+WINDOW_MINUTES = 5
+LOOKBACK_NS = (WINDOW_MINUTES + 5) * 60 * 1_000_000_000
 
 _artifact = None
+_sent_windows: set[str] = set()
 
 
-@app.on_event("startup")
-def load_model():
+def _is_window_closed(window_start: pd.Timestamp) -> bool:
+    window_end = window_start + pd.Timedelta(minutes=WINDOW_MINUTES)
+    return window_end.to_pydatetime().replace(tzinfo=None) <= pd.Timestamp.utcnow().replace(tzinfo=None)
+
+
+async def _polling_loop():
+    while True:
+        try:
+            since_ns = time.time_ns() - LOOKBACK_NS
+            logs = await fetch_recent_logs(since_ns)
+
+            if logs:
+                df = loki_logs_to_dataframe(logs)
+                if not df.empty:
+                    features = build_features(df, window=f"{WINDOW_MINUTES}min")
+                    predictions = predict_anomalies(features)
+
+                    closed = predictions[
+                        predictions["timestamp"].apply(_is_window_closed)
+                        & ~predictions["timestamp"].astype(str).isin(_sent_windows)
+                    ]
+
+                    if not closed.empty:
+                        created = await send_anomalies_to_backend(closed)
+                        _sent_windows.update(closed["timestamp"].astype(str))
+                        if created:
+                            print(f"[polling] {len(created)} anomalie(s) envoyée(s) au backend")
+
+                    cutoff = pd.Timestamp.utcnow().replace(tzinfo=None) - pd.Timedelta(hours=1)
+                    _sent_windows.intersection_update(
+                        ts for ts in _sent_windows if pd.Timestamp(ts) > cutoff
+                    )
+
+        except Exception as exc:
+            print(f"[polling] erreur pendant le cycle: {exc}")
+
+        await asyncio.sleep(POLL_INTERVAL_SECONDS)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     global _artifact
     if not MODEL_PATH.exists():
         raise RuntimeError(f"Modèle introuvable : {MODEL_PATH}. Lance d'abord train_model.py")
     _artifact = joblib.load(MODEL_PATH)
+
+    task = asyncio.create_task(_polling_loop())
+    print(f"[main] boucle de polling démarrée (intervalle: {POLL_INTERVAL_SECONDS}s, lookback: {LOOKBACK_NS/1e9:.0f}s)")
+
+    yield
+
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    print("[main] boucle de polling arrêtée")
+
+
+app = FastAPI(title="AiOps ML Service", version="0.1.0", lifespan=lifespan)
 
 
 class PredictionInput(BaseModel):
@@ -46,12 +112,11 @@ def predict(payload: PredictionInput):
     scaler = _artifact["scaler"]
     feature_cols = _artifact["features"]
 
-    # DataFrame avec les mêmes noms de colonnes que lors du fit (évite le UserWarning)
     x = pd.DataFrame([[getattr(payload, col) for col in feature_cols]], columns=feature_cols)
     x_scaled = scaler.transform(x)
 
-    pred = model.predict(x_scaled)[0]             # -1 = anomalie, 1 = normal
-    score = model.decision_function(x_scaled)[0]  # plus bas = plus anormal
+    pred = model.predict(x_scaled)[0]
+    score = model.decision_function(x_scaled)[0]
 
     return PredictionOutput(
         is_anomaly=bool(pred == -1),

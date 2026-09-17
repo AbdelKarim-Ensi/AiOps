@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-service-config
+  namespace: aiops
+data:
+  LOKI_URL: "http://loki.observability.svc.cluster.local:3100"
+  LOKI_TENANT_ID: "aiops"
+  LOKI_QUERY: '{namespace="aiops", container="api"}'
+  BACKEND_URL: "http://api-service.aiops.svc.cluster.local:3000"

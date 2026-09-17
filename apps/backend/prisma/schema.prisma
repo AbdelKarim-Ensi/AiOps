@@ -2,9 +2,9 @@
 // mais Prisma génère un client TypeScript entièrement typé à partir de ce fichier.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -45,4 +45,23 @@ model Task {
 
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+}
+model Anomaly {
+  id                   String   @id @default(uuid())
+  windowStart          DateTime @unique
+  windowEnd            DateTime
+
+  totalLogs            Int
+  errorCount           Int
+  distinctUrls         Int
+  simulateFailureCount Int
+  errorRate            Float
+  anomalyScore         Float
+
+  isFalsePositive      Boolean  @default(false)
+
+  createdAt            DateTime @default(now())
+
+  @@index([windowStart])
+  @@index([createdAt])
 }
