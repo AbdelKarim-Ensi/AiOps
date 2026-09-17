@@ -93,6 +93,19 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Appliquer les migrations Prisma
+        working-directory: apps/backend
+        run: |
+          kubectl run prisma-migrate-${{ github.sha }} \
+            --rm -i --restart=Never \
+            --image=${{ needs.docker-build-push.outputs.image_name }}:${{ github.sha }} \
+            --namespace=aiops \
+            --env="DATABASE_URL=${{ secrets.DATABASE_URL }}" \
+            --command -- npx prisma migrate deploy
+
       - name: Redéployer sur le cluster kind
         run: |
           kubectl set image deployment/api api=${{ needs.docker-build-push.outputs.image_name }}:${{ github.sha }} -n aiops
