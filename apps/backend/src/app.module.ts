@@ -6,6 +6,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { TasksModule } from './tasks/tasks.module';
 import { AnomaliesModule } from './anomalies/anomalies.module';
 import { HealthController } from './common/health.controller';
+import { MetricsModule } from './metrics/metrics.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { HealthController } from './common/health.controller';
     PrismaModule,
     TasksModule,
     AnomaliesModule,
+    MetricsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

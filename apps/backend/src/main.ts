@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
+import { MetricsInterceptor } from './metrics/metrics.interceptor';
 
 async function bootstrap() {
   // bufferLogs: true = NestJS met en mémoire tampon les logs de démarrage
@@ -20,6 +21,10 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  // Interceptor global pour peupler les métriques Prometheus
+  // (récupéré via le conteneur DI car il dépend de métriques injectées)
+  app.useGlobalInterceptors(app.get(MetricsInterceptor));
 
   await app.listen(process.env.PORT ?? 3000);
 }
