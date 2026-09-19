@@ -16,3 +16,16 @@ datasources:
           httpHeaderName1: "X-Scope-OrgID"
         secureJsonData:
           httpHeaderValue1: "aiops"
+      # AJOUT : datasource Prometheus (Phase 9), même namespace que Grafana
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-server.observability.svc.cluster.local:80
+        isDefault: false
+
+# AJOUT : sidecar qui charge les dashboards depuis les ConfigMaps labellisées (Phase 9)
+sidecar:
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    labelValue: "1"
