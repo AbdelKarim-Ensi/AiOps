@@ -1,0 +1,22 @@
+server:
+  persistentVolume:
+    enabled: false
+
+alertmanager:
+  enabled: false
+
+# extraScrapeConfigs est à la racine du values (pas sous server:) pour ce
+# chart. On scrape manuellement api-service (NestJS) et ml-service (FastAPI)
+# en plus des jobs par défaut (kubernetes-pods, etc.). Pas de ServiceMonitor
+# CRD ici (pas d'Operator installé) : la config de scrape est déclarée
+# directement dans prometheus.yml via cette clé.
+extraScrapeConfigs: |
+  - job_name: 'api-service'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['api-service.aiops.svc.cluster.local:3000']
+
+  - job_name: 'ml-service'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['ml-service.aiops.svc.cluster.local:8001']
