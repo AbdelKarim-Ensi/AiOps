@@ -7,6 +7,8 @@ import joblib
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Histogram, Gauge
 
 from app.loki_client import fetch_recent_logs
 from app.features.loki_adapter import loki_logs_to_dataframe
@@ -22,6 +24,29 @@ LOOKBACK_NS = (WINDOW_MINUTES + 5) * 60 * 1_000_000_000
 _artifact = None
 _sent_windows: set[str] = set()
 
+# --- Métriques custom sur la boucle de polling ---
+POLLING_CYCLES = Counter(
+    "ml_polling_cycles_total",
+    "Nombre total de cycles de polling exécutés",
+    ["status"],
+)
+
+POLLING_CYCLE_DURATION = Histogram(
+    "ml_polling_cycle_duration_seconds",
+    "Durée d'un cycle de polling en secondes",
+    buckets=[0.1, 0.5, 1, 2, 5, 10, 20, 30],
+)
+
+LAST_WINDOW_ANOMALIES = Gauge(
+    "ml_anomalies_detected_last_window",
+    "Nombre d'anomalies détectées lors du dernier cycle de polling",
+)
+
+ANOMALIES_SENT_TOTAL = Counter(
+    "ml_anomalies_sent_total",
+    "Nombre total d'anomalies envoyées au backend",
+)
+
 
 def _is_window_closed(window_start: pd.Timestamp) -> bool:
     window_end = window_start + pd.Timedelta(minutes=WINDOW_MINUTES)
@@ -30,6 +55,8 @@ def _is_window_closed(window_start: pd.Timestamp) -> bool:
 
 async def _polling_loop():
     while True:
+        cycle_start = time.monotonic()
+        cycle_status = "success"
         try:
             since_ns = time.time_ns() - LOOKBACK_NS
             logs = await fetch_recent_logs(since_ns)
@@ -50,6 +77,11 @@ async def _polling_loop():
                         _sent_windows.update(closed["timestamp"].astype(str))
                         if created:
                             print(f"[polling] {len(created)} anomalie(s) envoyée(s) au backend")
+                            ANOMALIES_SENT_TOTAL.inc(len(created))
+
+                        LAST_WINDOW_ANOMALIES.set(len(created) if created else 0)
+                    else:
+                        LAST_WINDOW_ANOMALIES.set(0)
 
                     cutoff = pd.Timestamp.utcnow().replace(tzinfo=None) - pd.Timedelta(hours=1)
                     _sent_windows.intersection_update(
@@ -58,6 +90,11 @@ async def _polling_loop():
 
         except Exception as exc:
             print(f"[polling] erreur pendant le cycle: {exc}")
+            cycle_status = "error"
+
+        finally:
+            POLLING_CYCLES.labels(status=cycle_status).inc()
+            POLLING_CYCLE_DURATION.observe(time.monotonic() - cycle_start)
 
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
@@ -83,6 +120,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AiOps ML Service", version="0.1.0", lifespan=lifespan)
+
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 
 class PredictionInput(BaseModel):
