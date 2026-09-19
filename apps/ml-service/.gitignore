@@ -1,1 +1,3 @@
 model/*.joblib
+# AJOUT : le modèle Isolation Forest doit être embarqué dans l'image (CI/CD)
+!model/isolation_forest.joblib
