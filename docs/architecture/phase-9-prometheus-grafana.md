@@ -124,6 +124,7 @@ Résultat : rollout réussi, `Application startup complete`, `GET /metrics 200 O
 - `up{job=~"api-service|ml-service"}` renvoie 1 pour les deux ; `increase(ml_polling_cycles_total{status="success"}[5m])` augmente (~19 juste après le redéploiement, la fenêtre de 5 min n'étant pas encore pleine).
 - Datasource Prometheus : "Successfully queried the Prometheus API" dans Grafana.
 - Dashboard chargé par le sidecar : panels UP, latence P95/P99, requêtes par route, durée des cycles ML alimentés en données.
+- Panel « API - Taux d'erreur 5xx » : affiche 0 % (au lieu de « No data ») grâce au `or vector(0)`.
 - PR de la datasource et du dashboard : #11.
 
 ## 8. Leçons apprises
@@ -141,4 +142,4 @@ Résultat : rollout réussi, `Application startup complete`, `GET /metrics 200 O
 
 ## 9. Suite
 
-Phase 10 selon la roadmap.
+Phase 10 : frontend dashboard. Phase 11 : alerting (Alertmanager), qui s'appuiera sur les métriques Prometheus de cette phase.
