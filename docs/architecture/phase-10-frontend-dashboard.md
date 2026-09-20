@@ -36,7 +36,7 @@ En développement, `ng serve` joue le rôle de l'Ingress : `proxy.conf.json` env
 
 ## Backend (10.1)
 
-L'API expose pour les anomalies : une liste filtrable et paginée (période, statut faux positif), des statistiques pour le dashboard, le détail par identifiant (400 si l'id n'est pas un UUID, 404 s'il n'existe pas) et le marquage en faux positif (`PATCH /anomalies/:id/false-positive`). Le détail des paramètres se trouve dans le contrôleur et dans `apps/frontend/src/app/core/anomalies.service.ts`.
+L'API expose pour les anomalies : une liste filtrable et paginée (période, statut faux positif), des statistiques pour le dashboard, le détail par identifiant (400 si l'id n'est pas un UUID, 404 s'il n'existe pas) et le marquage en faux positif (`PATCH /anomalies/:id/false-positive`). La pagination utilise les paramètres `limit` et `offset` (le frontend demande `limit=10&offset=0`). Le détail des filtres se trouve dans le contrôleur et dans `apps/frontend/src/app/core/anomalies.service.ts`.
 
 `errorRate` est un ratio entre 0 et 1 (0,33 pour 40 erreurs sur 120 logs).
 
@@ -103,8 +103,8 @@ Il n'y a pas d'étape lint : `package.json` ne définit que `build` et `test`.
 
 ## Limites connues
 
-- **Dashboard non testé de bout en bout dans le cluster avant la fusion.** L'API en place dans le cluster utilisait encore l'image d'avant la 10.1 (`/api/anomalies/stats` renvoyait 404, et la liste un simple tableau). La validation complète dépend de la nouvelle image du backend, construite par `backend-ci.yml` après la fusion. Avant la fusion, l'Ingress a été vérifié par `/api/health`, `/api/anomalies` et le fallback SPA sur `/anomalies/abc`.
-- **Images ghcr** : le Deployment référence une image qui n'existe sur ghcr qu'après le premier push de la CI. Si le pod passe en `ImagePullBackOff`, il faut vérifier que le package `aiops-frontend` est accessible au cluster (visibilité du package).
+- **Validation dans le cluster (après fusion).** Avant la fusion, l'API du cluster utilisait l'image d'avant la 10.1 (`/api/anomalies/stats` renvoyait 404). Après la fusion, `backend-ci.yml` et `frontend-ci.yml` ont déployé des images taguées avec le SHA du commit. Sur `http://localhost/`, `/api/health` et `/api/anomalies/stats` répondent, le dashboard affiche 5 anomalies, 673 logs, 126 erreurs et 1 faux positif, la liste et le détail affichent les 5 anomalies avec leurs 9 champs, et `/anomalies/00000000-0000-4000-8000-000000000000` affiche « Anomalie introuvable » (fallback SPA de nginx puis 404 de l'API).
+- **Image du Deployment** : le manifeste versionné référence `:latest`, alors que la CI place l'image taguée avec le SHA du commit. Réappliquer `deployment.yaml` à la main remet donc `:latest` jusqu'au prochain déploiement.
 - **Une seule réplique et aucun test d'intégration** : le frontend n'a pas de tests de composants, seulement les deux tests de `app.spec.ts`.
 
 ## Vérification après fusion
