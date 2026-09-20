@@ -1,0 +1,169 @@
+<section class="mx-auto w-full max-w-5xl">
+  @if (error()) {
+    <p
+      class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+      role="alert"
+    >
+      Impossible de charger les anomalies. Change de page ou de filtre pour réessayer.
+    </p>
+  }
+  @if (actionError()) {
+    <p
+      class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+      role="alert"
+    >
+      Impossible de marquer cette anomalie comme faux positif.
+    </p>
+  }
+
+  <div
+    class="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-xl shadow-slate-200/60 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:shadow-black/30"
+  >
+    <div class="border-b border-inherit px-5 py-4">
+      <h1 class="text-sm font-semibold tracking-wide">Anomalies</h1>
+    </div>
+
+    <div class="flex flex-wrap items-end gap-4 border-b border-inherit p-5">
+      <label class="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+        Du
+        <input
+          #fromInput
+          type="date"
+          [value]="from()"
+          (change)="setFrom(fromInput.value)"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+        />
+      </label>
+      <label class="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+        Au
+        <input
+          #toInput
+          type="date"
+          [value]="to()"
+          (change)="setTo(toInput.value)"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+        />
+      </label>
+      <label class="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+        Faux positif
+        <select
+          #fpSelect
+          [value]="falsePositive()"
+          (change)="setFalsePositive(fpSelect.value)"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+        >
+          <option value="all">Tous</option>
+          <option value="yes">Oui</option>
+          <option value="no">Non</option>
+        </select>
+      </label>
+      @if (hasFilters()) {
+        <button
+          type="button"
+          (click)="reset()"
+          class="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+        >
+          Réinitialiser
+        </button>
+      }
+    </div>
+
+    <div class="overflow-x-auto transition-opacity" [class.opacity-60]="loading()">
+      <table class="w-full text-left text-sm">
+        <thead
+          class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:text-slate-400"
+        >
+          <tr>
+            <th class="px-5 py-3 font-medium">Fenêtre</th>
+            <th class="px-5 py-3 text-right font-medium">Logs</th>
+            <th class="px-5 py-3 text-right font-medium">Erreurs</th>
+            <th class="px-5 py-3 text-right font-medium">Taux d'erreur</th>
+            <th class="px-5 py-3 text-right font-medium">Score</th>
+            <th class="px-5 py-3 text-right font-medium">Faux positif</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          @for (a of items(); track a.id) {
+            <tr
+              (click)="open(a)"
+              class="cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              <td class="px-5 py-3">
+                <a
+                
+                  [routerLink]="['/anomalies', a.id]"
+                  (click)="$event.stopPropagation()"
+                  class="font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                >
+                  {{ a.windowStart | date: 'dd/MM/yyyy HH:mm' }}
+                </a>
+                <div class="text-xs text-slate-500 dark:text-slate-400">
+                  jusqu'à {{ a.windowEnd | date: 'HH:mm' }}
+                </div>
+              </td>
+              <td class="px-5 py-3 text-right tabular-nums">{{ formatInt(a.totalLogs) }}</td>
+              <td class="px-5 py-3 text-right tabular-nums">{{ formatInt(a.errorCount) }}</td>
+              <td class="px-5 py-3 text-right tabular-nums">{{ formatDec(a.errorRate) }}</td>
+              <td class="px-5 py-3 text-right tabular-nums">{{ formatDec(a.anomalyScore) }}</td>
+              <td class="px-5 py-3 text-right">
+                @if (a.isFalsePositive) {
+                  <span
+                    class="inline-flex rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                  >
+                    Faux positif
+                  </span>
+                } @else {
+                  <button
+                    type="button"
+                    (click)="markFalsePositive(a, $event)"
+                    [disabled]="busyId() === a.id"
+                    class="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
+                  >
+                    {{ busyId() === a.id ? 'En cours…' : 'Marquer faux positif' }}
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6" class="px-5 py-10 text-center text-slate-500 dark:text-slate-400">
+                @if (loading()) {
+                  Chargement…
+                } @else {
+                  Aucune anomalie pour ces critères.
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div
+      class="flex items-center justify-between gap-4 border-t border-slate-200 px-5 py-3 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400"
+    >
+      <span>{{ rangeLabel() }}</span>
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          (click)="prev()"
+          [disabled]="page() <= 1"
+          aria-label="Page précédente"
+          class="inline-flex size-9 items-center justify-center rounded-lg border border-slate-200 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800"
+        >
+          <svg lucideChevronLeft [size]="16"></svg>
+        </button>
+        <span>Page {{ page() }} / {{ totalPages() }}</span>
+        <button
+          type="button"
+          (click)="next()"
+          [disabled]="page() >= totalPages()"
+          aria-label="Page suivante"
+          class="inline-flex size-9 items-center justify-center rounded-lg border border-slate-200 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800"
+        >
+          <svg lucideChevronRight [size]="16"></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>

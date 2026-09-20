@@ -1,0 +1,90 @@
+<div class="relative w-full">
+  <svg
+    [attr.viewBox]="'0 0 ' + W + ' ' + H"
+    class="block h-auto w-full touch-none select-none"
+    role="img"
+    [attr.aria-label]="ariaLabel()"
+    (pointermove)="onMove($event)"
+    (pointerleave)="onLeave()"
+  >
+    @for (tick of yTicks(); track tick.y) {
+      <line
+        [attr.x1]="ML"
+        [attr.x2]="W - MR"
+        [attr.y1]="tick.y"
+        [attr.y2]="tick.y"
+        [attr.stroke]="grid()"
+        stroke-dasharray="2 6"
+      />
+      <text
+        [attr.x]="ML - 10"
+        [attr.y]="tick.y + 4"
+        text-anchor="end"
+        font-size="11"
+        [attr.fill]="muted()"
+      >
+        {{ tick.label }}
+      </text>
+    }
+
+    @for (tick of xTicks(); track tick.i) {
+      <text
+        [attr.x]="tick.x"
+        [attr.y]="H - 8"
+        text-anchor="middle"
+        font-size="11"
+        [attr.fill]="muted()"
+      >
+        {{ tick.label }}
+      </text>
+    }
+
+    <path
+      [attr.d]="path()"
+      fill="none"
+      [attr.stroke]="color()"
+      stroke-width="3"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    @if (active(); as a) {
+      <line
+        [attr.x1]="a.x"
+        [attr.x2]="a.x"
+        [attr.y1]="MT"
+        [attr.y2]="H - MB"
+        [attr.stroke]="muted()"
+        stroke-dasharray="4 4"
+      />
+      <circle
+        [attr.cx]="a.x"
+        [attr.cy]="a.y"
+        r="6"
+        [attr.fill]="color()"
+        [attr.stroke]="surface()"
+        stroke-width="2"
+      />
+    }
+  </svg>
+
+  @if (active(); as a) {
+    <div
+      class="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-xl border px-3 py-2 text-sm shadow-lg"
+      [class]="tooltipClass()"
+      [style.left.%]="a.left"
+      [style.top.%]="a.top"
+      style="margin-top: -12px"
+    >
+      <div class="text-xs text-slate-400">{{ a.time }}</div>
+      <div>
+        <span
+          class="mr-2 inline-block size-2 rounded-full"
+          [style.background-color]="color()"
+        ></span>
+        <span [style.color]="muted()">{{ label() }} :</span>
+        <strong class="ml-1">{{ a.value }}</strong>
+      </div>
+    </div>
+  }
+</div>

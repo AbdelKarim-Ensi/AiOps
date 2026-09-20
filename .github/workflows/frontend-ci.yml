@@ -1,0 +1,87 @@
+name: Frontend CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/frontend/**"
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/frontend
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Tests unitaires
+        run: npm test -- --no-watch
+
+  docker-build-push:
+    needs: build-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_name: ${{ steps.vars.outputs.image_name }}
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Calculer le nom d'image en minuscules
+        id: vars
+        run: |
+          OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "image_name=ghcr.io/${OWNER_LOWER}/aiops-frontend" >> "$GITHUB_OUTPUT"
+
+      - name: Login à GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build et push de l'image
+        uses: docker/build-push-action@v5
+        with:
+          context: apps/frontend
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.image_name }}:latest
+            ${{ steps.vars.outputs.image_name }}:${{ github.sha }}
+
+  deploy:
+    needs: docker-build-push
+    runs-on: self-hosted
+
+    steps:
+      - name: Redéployer sur le cluster kind
+        run: |
+          kubectl set image deployment/frontend frontend=${{ needs.docker-build-push.outputs.image_name }}:${{ github.sha }} -n aiops
+          kubectl rollout status deployment/frontend -n aiops --timeout=300s

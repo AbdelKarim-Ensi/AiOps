@@ -23,3 +23,7 @@ kubeconfig*.yaml
 # Logs et fichiers système
 *.log
 .DS_Store
+
+# AJOUT : states et backups Terraform (données sensibles possibles)
+*.tfstate
+*.tfstate.*
