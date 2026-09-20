@@ -1,0 +1,9 @@
+node_modules
+dist
+.angular
+.git
+.vscode
+README.md
+install-tailwind-style.py
+Dockerfile
+.dockerignore
