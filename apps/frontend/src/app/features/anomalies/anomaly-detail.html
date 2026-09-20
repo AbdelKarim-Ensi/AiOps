@@ -1,0 +1,122 @@
+<section class="mx-auto w-full max-w-5xl">
+  <a
+    routerLink="/anomalies"
+    class="mb-4 inline-flex items-center gap-1.5 rounded-lg text-sm font-medium text-slate-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-slate-300"
+  >
+    <svg lucideArrowLeft [size]="16"></svg>
+    Retour à la liste
+  </a>
+
+  @if (actionError()) {
+    <p
+      class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+      role="alert"
+    >
+      Impossible de marquer cette anomalie comme faux positif.
+    </p>
+  }
+
+  <div
+    class="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-xl shadow-slate-200/60 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:shadow-black/30"
+  >
+    @switch (state()) {
+      @case ('loading') {
+        <p class="px-5 py-10 text-center text-slate-500 dark:text-slate-400">Chargement…</p>
+      }
+      @case ('invalid') {
+        <p class="px-5 py-10 text-center text-slate-500 dark:text-slate-400" role="alert">
+          Identifiant invalide : ce n'est pas un identifiant d'anomalie (UUID).
+        </p>
+      }
+      @case ('notfound') {
+        <p class="px-5 py-10 text-center text-slate-500 dark:text-slate-400" role="alert">
+          Anomalie introuvable. Elle a peut-être été supprimée.
+        </p>
+      }
+      @case ('error') {
+        <p class="px-5 py-10 text-center text-slate-500 dark:text-slate-400" role="alert">
+          Impossible de joindre l'API. Recharge la page pour réessayer.
+        </p>
+      }
+      @case ('ready') {
+        @if (anomaly(); as a) {
+          <div class="flex flex-wrap items-center justify-between gap-4 border-b border-inherit px-5 py-4">
+            <div>
+              <h1 class="text-sm font-semibold tracking-wide">Détail de l'anomalie</h1>
+              <p class="mt-1 break-all font-mono text-xs text-slate-500 dark:text-slate-400">
+                {{ a.id }}
+              </p>
+            </div>
+            @if (a.isFalsePositive) {
+              <span
+                class="inline-flex rounded-lg bg-slate-100 px-2.5 py-1 text-sm font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+              >
+                Faux positif
+              </span>
+            } @else {
+              <button
+                type="button"
+                (click)="markFalsePositive()"
+                [disabled]="busy()"
+                class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                {{ busy() ? 'En cours…' : 'Marquer faux positif' }}
+              </button>
+            }
+          </div>
+
+          <dl class="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+              <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Début de fenêtre</dt>
+              <dd class="mt-1 text-lg font-semibold tabular-nums">
+                {{ a.windowStart | date: 'dd/MM/yyyy HH:mm:ss' }}
+              </dd>
+            </div>
+            <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+              <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Fin de fenêtre</dt>
+              <dd class="mt-1 text-lg font-semibold tabular-nums">
+                {{ a.windowEnd | date: 'dd/MM/yyyy HH:mm:ss' }}
+              </dd>
+            </div>
+            <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+              <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Enregistrée le</dt>
+              <dd class="mt-1 text-lg font-semibold tabular-nums">
+                {{ a.createdAt | date: 'dd/MM/yyyy HH:mm:ss' }}
+              </dd>
+            </div>
+            <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+              <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Logs analysés</dt>
+              <dd class="mt-1 text-2xl font-bold tabular-nums">{{ formatInt(a.totalLogs) }}</dd>
+            </div>
+            <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+              <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Logs en erreur</dt>
+              <dd class="mt-1 text-2xl font-bold tabular-nums">{{ formatInt(a.errorCount) }}</dd>
+            </div>
+            <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+              <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Taux d'erreur</dt>
+              <dd class="mt-1 text-2xl font-bold tabular-nums">{{ formatDec(a.errorRate) }}</dd>
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                soit {{ formatPercent(a.errorRate) }} des logs
+              </p>
+            </div>
+            <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+              <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">URLs distinctes</dt>
+              <dd class="mt-1 text-2xl font-bold tabular-nums">{{ formatInt(a.distinctUrls) }}</dd>
+            </div>
+            <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+              <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Appels simulate-failure</dt>
+              <dd class="mt-1 text-2xl font-bold tabular-nums">{{ formatInt(a.simulateFailureCount) }}</dd>
+            </div>
+            <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+              <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Score d'anomalie</dt>
+              <dd class="mt-1 text-2xl font-bold tabular-nums">{{ formatDec(a.anomalyScore) }}</dd>
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Isolation Forest : plus il est bas, plus la fenêtre est atypique
+              </p>
+            </div>
+          </dl>
+        }
+      }
+    }
+  </div>
+</section>

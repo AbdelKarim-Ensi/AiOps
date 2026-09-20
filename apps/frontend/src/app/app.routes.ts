@@ -16,5 +16,12 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/anomalies/anomaly-list').then((m) => m.AnomalyList),
   },
+  // AJOUT : Phase 10.6, détail d'une anomalie
+  {
+    path: 'anomalies/:id',
+    title: 'AiOps - Détail anomalie',
+    loadComponent: () =>
+      import('./features/anomalies/anomaly-detail').then((m) => m.AnomalyDetail),
+  },
   { path: '**', redirectTo: 'dashboard' },
 ];
