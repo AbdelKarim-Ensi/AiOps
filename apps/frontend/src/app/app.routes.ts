@@ -9,5 +9,12 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/dashboard/dashboard').then((m) => m.Dashboard),
   },
+  // AJOUT : Phase 10.5, liste paginée des anomalies
+  {
+    path: 'anomalies',
+    title: 'AiOps - Anomalies',
+    loadComponent: () =>
+      import('./features/anomalies/anomaly-list').then((m) => m.AnomalyList),
+  },
   { path: '**', redirectTo: 'dashboard' },
 ];
