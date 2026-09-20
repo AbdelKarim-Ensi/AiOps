@@ -1,0 +1,89 @@
+<section class="mx-auto w-full max-w-5xl">
+  @if (error()) {
+    <p
+      class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+      role="alert"
+    >
+      Impossible de joindre l'API. Nouvel essai automatique toutes les 30 s.
+    </p>
+  }
+
+  @if (loaded()) {
+    <div
+      class="w-full overflow-hidden rounded-2xl border shadow-xl transition-colors"
+      [class]="ui().card"
+    >
+      <!-- AJOUT : en-tête + bouton clair/sombre (Moon / Sun de Lucide) -->
+      <div class="flex items-center justify-between border-b border-inherit px-5 py-4">
+        <h1 class="text-sm font-semibold tracking-wide">Métriques AiOps</h1>
+        <button
+          type="button"
+          (click)="toggleDark()"
+          [attr.aria-label]="dark() ? 'Passer en mode clair' : 'Passer en mode sombre'"
+          class="inline-flex size-9 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+          [class]="ui().toggle"
+        >
+          @if (dark()) {
+            <svg lucideSun [size]="16"></svg>
+          } @else {
+            <svg lucideMoon [size]="16"></svg>
+          }
+        </button>
+      </div>
+
+      <div
+        class="grid grid-cols-1 divide-y sm:grid-cols-2 xl:grid-cols-4 xl:divide-x xl:divide-y-0"
+        [class]="ui().divide"
+      >
+        @for (view of views(); track view.def.key) {
+          <button
+            type="button"
+            (click)="select(view.def.key)"
+            [attr.aria-pressed]="view.def.key === selected()"
+            class="p-5 text-left transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+            [class]="ui().hover + ' ' + (view.def.key === selected() ? ui().selected : ui().idle)"
+          >
+            <div class="mb-3 flex items-center justify-between gap-2">
+              <span class="text-sm font-medium" [class]="ui().label">{{ view.def.label }}</span>
+              <span
+                class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-sm font-medium"
+                [class]="badgeClass(view)"
+              >
+                @if (direction(view) > 0) {
+                  <svg lucideArrowUp [size]="14"></svg>
+                } @else if (direction(view) < 0) {
+                  <svg lucideArrowDown [size]="14"></svg>
+                }
+                {{ badgeText(view) }}
+              </span>
+            </div>
+            <div class="text-2xl font-bold tracking-tight">{{ format(view.current) }}</div>
+            <div class="mt-1 text-xs" [class]="ui().label">
+              contre {{ format(view.previous) }} les 24 h précédentes
+            </div>
+          </button>
+        }
+      </div>
+
+      <div class="w-full p-3 pt-8 sm:p-6">
+        @if (active(); as a) {
+          <app-line-chart
+            [points]="a.series"
+            [color]="a.def.color"
+            [label]="a.def.label"
+            [formatValue]="format"
+            [dark]="dark()"
+          />
+        }
+        <p class="mt-3 text-center text-xs text-slate-400">
+          Dernières 24 h, par heure · actualisation toutes les 30 s
+          @if (truncated()) {
+            · affichage limité aux 500 anomalies les plus récentes
+          }
+        </p>
+      </div>
+    </div>
+  } @else if (!error()) {
+    <p class="text-slate-500">Chargement…</p>
+  }
+</section>

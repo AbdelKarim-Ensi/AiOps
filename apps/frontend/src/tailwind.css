@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@source "./app";
+
+/* AJOUT : mode sombre sur toute la fenêtre (classe .dark posée sur <html>) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+html.dark {
+  color-scheme: dark;
+}
+html.dark body,
+html.dark app-root,
+html.dark app-root main {
+  background-color: #020617;
+  color: #f8fafc;
+}
