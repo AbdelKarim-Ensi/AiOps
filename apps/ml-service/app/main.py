@@ -21,6 +21,9 @@ POLL_INTERVAL_SECONDS = 10
 WINDOW_MINUTES = 5
 LOOKBACK_NS = (WINDOW_MINUTES + 5) * 60 * 1_000_000_000
 
+# AJOUT : base de conversion decision_function -> score d'alerte (0 = normal, 1 = très anormal)
+ALERT_SCORE_BASE = 0.5
+
 _artifact = None
 _sent_windows: set[str] = set()
 
@@ -47,6 +50,12 @@ ANOMALIES_SENT_TOTAL = Counter(
     "Nombre total d'anomalies envoyées au backend",
 )
 
+# AJOUT : score d'anomalie de la dernière fenêtre fermée, pour les règles d'alerte Prometheus
+ANOMALY_SCORE_LATEST = Gauge(
+    "ml_anomaly_score_latest",
+    "Score d'anomalie (0.5 - decision_function) de la dernière fenêtre fermée ; plus c'est haut, plus c'est anormal",
+)
+
 
 def _is_window_closed(window_start: pd.Timestamp) -> bool:
     window_end = window_start + pd.Timedelta(minutes=WINDOW_MINUTES)
@@ -66,6 +75,13 @@ async def _polling_loop():
                 if not df.empty:
                     features = build_features(df, window=f"{WINDOW_MINUTES}min")
                     predictions = predict_anomalies(features)
+
+                    # AJOUT : score de la dernière fenêtre fermée, calculé sur toutes les
+                    # fenêtres fermées (pas seulement les nouvelles) pour ne pas retomber à 0
+                    closed_all = predictions[predictions["timestamp"].apply(_is_window_closed)]
+                    if not closed_all.empty:
+                        latest = closed_all.sort_values("timestamp").iloc[-1]
+                        ANOMALY_SCORE_LATEST.set(ALERT_SCORE_BASE - float(latest["anomaly_score"]))
 
                     closed = predictions[
                         predictions["timestamp"].apply(_is_window_closed)
