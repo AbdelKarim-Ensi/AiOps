@@ -77,7 +77,7 @@ Versions utilisées pendant le développement :
 | kubectl | 1.37.0 |
 | Terraform | 1.9.5 (provider `tehcyx/kind`) |
 | Helm | 3.22.0 |
-| Node.js | 24.21.0 (build local) |
+| Node.js | 24.21.0 en local ; 20 (backend) et 22 (frontend) dans la CI |
 | Python | 3.12.3 (build local) |
 
 Il faut aussi :
