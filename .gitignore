@@ -27,3 +27,4 @@ kubeconfig*.yaml
 # AJOUT : states et backups Terraform (données sensibles possibles)
 *.tfstate
 *.tfstate.*
+desktop.ini

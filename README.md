@@ -63,6 +63,7 @@ flowchart LR
 │       └── observability/          # loki, grafana-alloy, grafana (+ dashboards),
 │                                   # prometheus, alertmanager, install.sh
 ├── docs/architecture/    # documentation détaillée par phase
+├── docker-compose.yml    # lancement local de l'API et de PostgreSQL (phase 2)
 └── .github/workflows/    # CI/CD par service
 ```
 
