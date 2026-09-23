@@ -1,8 +1,19 @@
 # AiOps
 
+[![Backend CI](https://github.com/AbdelKarim-Ensi/AiOps/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/AbdelKarim-Ensi/AiOps/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/AbdelKarim-Ensi/AiOps/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/AbdelKarim-Ensi/AiOps/actions/workflows/frontend-ci.yml)
+[![ML Service CI](https://github.com/AbdelKarim-Ensi/AiOps/actions/workflows/ml-service-ci.yml/badge.svg)](https://github.com/AbdelKarim-Ensi/AiOps/actions/workflows/ml-service-ci.yml)
+![License](https://img.shields.io/badge/license-MIT-blue)
+
 Plateforme d'observabilité avec détection d'anomalies sur les logs, déployée sur Kubernetes (kind) et entièrement reproductible : les logs JSON de l'API NestJS sont collectés par Grafana Alloy, stockés dans Loki, analysés toutes les 10 secondes par un service ML (Isolation Forest sur des fenêtres de 5 minutes), puis affichés dans un dashboard Angular. Prometheus, Grafana et Alertmanager (notifications Slack) complètent la boucle.
 
-Projet d'apprentissage DevOps piloté par un PRD, avancé phase par phase avec une Definition of Done stricte.
+Projet d'apprentissage DevOps piloté par un [PRD](docs/PRD.pdf), avancé phase par phase avec une Definition of Done stricte.
+
+## Aperçu
+
+| Dashboard | Anomalies | Grafana |
+|---|---|---|
+| ![Dashboard](docs/images/dashboard.png) | ![Anomalies](docs/images/anomalies.png) | ![Grafana](docs/images/grafana.png) |
 
 ## Architecture
 
@@ -217,7 +228,13 @@ cd ~/Projects/actions-runner && ./run.sh
 
 ## Documentation détaillée
 
+- [Phase 1 : backend NestJS + Prisma](docs/architecture/phase-1-backend-nestjs-prisma.md)
+- [Phase 2 : dockerisation](docs/architecture/phase-2-dockerisation.md)
+- [Phase 3 : CI GitHub Actions](docs/architecture/phase-3-ci-github-actions.md)
+- [Phase 4 : cluster kind et Terraform](docs/architecture/phase-4-kind-terraform.md)
+- [Phase 5 : déploiement Kubernetes](docs/architecture/phase-5-k8s-deploy.md)
 - [Phase 6 : observabilité](docs/architecture/phase-6-observability.md)
+- [Phase 7 : service ML](docs/architecture/phase-7-ml-service.md)
 - [Phase 8 : intégration ML / Loki](docs/architecture/phase-8-ml-loki-integration.md)
 - [Phase 9 : Prometheus et Grafana](docs/architecture/phase-9-prometheus-grafana.md)
 - [Phase 10 : dashboard frontend](docs/architecture/phase-10-frontend-dashboard.md)
@@ -236,9 +253,12 @@ cd ~/Projects/actions-runner && ./run.sh
 - Pas de LLM : la détection repose uniquement sur un Isolation Forest.
 - Pas de multi-cloud : cluster local kind uniquement.
 - Pas d'authentification OAuth.
+- Seuil d'alerte fixé à **0.7** au lieu des 0.8 du PRD : 0.8 n'est jamais atteint sur l'échelle réelle du modèle (calibration détaillée dans la phase 11).
 - Déploiement de l'observabilité et création des Secrets manuels, hors CI.
 - Le service ML utilise une image locale (`aiops-ml-service:dev`), à recharger dans kind après chaque build.
 
 ## Contact
 
 Abdel Karim Doudey, [@AbdelKarim-Ensi](https://github.com/AbdelKarim-Ensi)
+
+Licence : [MIT](LICENSE)
