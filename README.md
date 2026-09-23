@@ -218,7 +218,11 @@ Tous les pods des namespaces `aiops`, `observability` et `ingress-nginx` doivent
 
 ## CI/CD
 
-Un workflow par service (`backend`, `frontend`, `ml-service`) dans `.github/workflows/`, sur le schéma `lint/build/test → docker-build-push → deploy`. Le job `deploy` tourne sur un runner self-hosted et met à jour l'image avec `kubectl set image`.
+Un workflow par service (`backend`, `frontend`, `ml-service`) dans `.github/workflows/`, sur le schéma `lint/build/test → docker-build-push → deploy`.
+
+- Les images sont poussées sur GHCR avec deux tags : `latest` et le SHA du commit.
+- Le job `deploy` tourne sur un runner self-hosted : il applique les migrations Prisma (pod éphémère) puis fait `kubectl set image` avec le **tag SHA**, ce qui rend chaque déploiement traçable et réversible (`kubectl rollout undo`). Le tag `latest` des manifests ne sert qu'à l'installation initiale.
+- Secret GitHub requis : `DATABASE_URL` (utilisé pour la migration Prisma).
 
 Le runner doit être lancé et rester actif, sinon les jobs `deploy` restent en attente :
 
