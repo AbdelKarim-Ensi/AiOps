@@ -1,969 +1,244 @@
-# Plateforme AIOps — Détection d'Anomalies dans les Logs
+# AiOps
 
-Monorepo du projet pré-PFE. Structure complète prévue pour les 12 phases
-de la roadmap. Chaque dossier correspond à une ou plusieurs phases —
-voir le tableau ci-dessous.
+Plateforme d'observabilité avec détection d'anomalies sur les logs, déployée sur Kubernetes (kind) et entièrement reproductible : les logs JSON de l'API NestJS sont collectés par Grafana Alloy, stockés dans Loki, analysés toutes les 10 secondes par un service ML (Isolation Forest sur des fenêtres de 5 minutes), puis affichés dans un dashboard Angular. Prometheus, Grafana et Alertmanager (notifications Slack) complètent la boucle.
 
-## Arborescence
+Projet d'apprentissage DevOps piloté par un PRD, avancé phase par phase avec une Definition of Done stricte.
 
-```
-aiops-platform/
-├── apps/
-│   ├── api/                    # Phase 1, 2, 5 — NestJS + Prisma + PostgreSQL
-│   │   ├── src/
-│   │   │   ├── tasks/          # Module Task (CRUD + logs)
-│   │   │   │   └── dto/
-│   │   │   ├── anomalies/      # Module Anomalies (Phase 8 — reçoit les résultats du ML)
-│   │   │   │   └── dto/
-│   │   │   ├── prisma/         # Service Prisma injectable
-│   │   │   └── common/         # Health check, filtres, guards partagés
-│   │   ├── prisma/             # schema.prisma + migrations
-│   │   └── test/
-│   │
-│   ├── ml-service/             # Phase 7, 8 — Python + FastAPI + Isolation Forest
-│   │   ├── app/                # API FastAPI (main.py, extraction de features)
-│   │   ├── model/              # Modèle entraîné (.pkl) + script train.py
-│   │   └── scripts/            # Génération de logs simulés, réentraînement
-│   │
-│   └── frontend/               # Phase 10 — Dashboard minimal
-│       ├── src/
-│       │   ├── components/     # Composants UI (liste anomalies, graphique)
-│       │   ├── pages/          # Pages de l'app
-│       │   └── services/       # Appels API (fetch/axios)
-│       └── public/
-│
-├── infra/
-│   ├── terraform/              # Phase 4 — Infrastructure as Code
-│   │   ├── modules/
-│   │   │   └── kind-cluster/   # Module réutilisable pour provisionner kind
-│   │   └── environments/
-│   │       └── local/          # Config spécifique à l'environnement local
-│   │
-│   └── k8s/                    # Manifests Kubernetes
-│       ├── base/               # Phase 5 — Déploiement applicatif
-│       │   ├── api/
-│       │   ├── ml-service/
-│       │   ├── frontend/
-│       │   ├── postgres/
-│       │   └── ingress/
-│       └── observability/      # Phase 6, 9, 11 — Stack observabilité
-│           ├── loki/
-│           ├── grafana-alloy/
-│           ├── prometheus/
-│           ├── grafana/
-│           └── alertmanager/
-│
-├── .github/
-│   └── workflows/               # Phase 3 — Pipelines CI/CD GitHub Actions
-│
-├── docs/
-│   └── architecture/            # Phase 12 — Schémas d'architecture, diagrammes
-│
-└── scripts/                     # Scripts utilitaires transverses (setup, seed, etc.)
+## Architecture
+
+```mermaid
+flowchart LR
+    U[Utilisateur] --> ING[Ingress Nginx]
+    ING -- "/" --> FE[Frontend Angular]
+    ING -- "/api" --> API[Backend NestJS]
+    API --> PG[(PostgreSQL)]
+    API -- logs JSON --> ALLOY[Grafana Alloy]
+    ALLOY --> LOKI[(Loki)]
+    ML[ML service FastAPI] -- "poll 10 s" --> LOKI
+    ML -- anomalies --> API
+    FE -- "/api" --> API
+    PROM[Prometheus] -- scrape --> API
+    PROM --> AM[Alertmanager] --> SLACK[Slack]
+    GRAF[Grafana] --> PROM
+    GRAF --> LOKI
 ```
 
-## Correspondance Phase -> Dossier
+## Stack technique
 
-| Phase | Dossier(s) concerné(s) |
+| Couche | Technologies |
 |---|---|
-| P1 — NestJS + Prisma + PostgreSQL | `apps/api/` |
-| P2 — Dockerisation | `apps/api/Dockerfile`, `docker-compose.yml` (racine) |
-| P3 — CI/CD basique | `.github/workflows/` |
-| P4 — Kubernetes local + Terraform | `infra/terraform/` |
-| P5 — Déploiement app sur K8s | `infra/k8s/base/` |
-| P6 — Loki + Grafana Alloy | `infra/k8s/observability/loki/`, `grafana-alloy/` |
-| P7 — Service ML Isolation Forest | `apps/ml-service/` |
-| P8 — Intégration ML <-> Loki <-> PostgreSQL | `apps/api/src/anomalies/`, `apps/ml-service/` |
-| P9 — Prometheus + Grafana | `infra/k8s/observability/prometheus/`, `grafana/` |
-| P10 — Dashboard frontend | `apps/frontend/` |
-| P11 — Alerting Alertmanager | `infra/k8s/observability/alertmanager/` |
-| P12 — Documentation | `docs/`, README racine |
+| Backend | NestJS, Prisma, PostgreSQL, logs JSON structurés |
+| Collecte de logs | Grafana Alloy → Loki |
+| ML | FastAPI, scikit-learn (Isolation Forest), polling Loki toutes les 10 s, fenêtres de 5 min |
+| Frontend | Angular (standalone components, signals), Tailwind, Lucide ; routes `/dashboard`, `/anomalies`, `/anomalies/:id` |
+| Métriques et alertes | Prometheus (chart `prometheus-community/prometheus` v29.31.1), Grafana, Alertmanager, Slack |
+| Infra | Docker (multi-stage), Kubernetes (kind), Terraform, Helm |
+| CI/CD | GitHub Actions, runner self-hosted pour le déploiement |
 
-## Statut actuel
-
-- [x] Phase 1 — API NestJS + Prisma (voir `apps/api/`)
-- [ ] Phase 2 — Dockerisation
-- [ ] Phase 3 — CI/CD basique
-- [ ] Phase 4 — Kubernetes local + Terraform
-- [ ] Phase 5 — Déploiement K8s
-- [ ] Phase 6 — Loki + Grafana Alloy
-- [ ] Phase 7 — Service ML
-- [ ] Phase 8 — Intégration ML
-- [ ] Phase 9 — Prometheus + Grafana
-- [ ] Phase 10 — Dashboard frontend
-- [ ] Phase 11 — Alerting
-- [ ] Phase 12 — Documentation finale
+## Structure du repo
 
 ```
-AiOps
-├─ README.md
-├─ apps
-│  ├─ backend
-│  │  ├─ .dockerignore
-│  │  ├─ .eslintrc.js
-│  │  ├─ .prettierrc
-│  │  ├─ Dockerfile
-│  │  ├─ README.md
-│  │  ├─ nest-cli.json
-│  │  ├─ package-lock.json
-│  │  ├─ package.json
-│  │  ├─ prisma
-│  │  │  ├─ migrations
-│  │  │  │  ├─ 20260831222244_init
-│  │  │  │  │  └─ migration.sql
-│  │  │  │  └─ migration_lock.toml
-│  │  │  └─ schema.prisma
-│  │  ├─ src
-│  │  │  ├─ anomalies
-│  │  │  │  └─ dto
-│  │  │  ├─ app.controller.spec.ts
-│  │  │  ├─ app.controller.ts
-│  │  │  ├─ app.module.ts
-│  │  │  ├─ app.service.ts
-│  │  │  ├─ common
-│  │  │  │  └─ health.controller.ts
-│  │  │  ├─ main.ts
-│  │  │  ├─ prisma
-│  │  │  │  ├─ prisma.module.ts
-│  │  │  │  └─ prisma.service.ts
-│  │  │  └─ tasks
-│  │  │     ├─ dto
-│  │  │     │  ├─ create-task.dto.ts
-│  │  │     │  └─ update-task.dto.ts
-│  │  │     ├─ tasks.controller.ts
-│  │  │     ├─ tasks.module.ts
-│  │  │     └─ tasks.service.ts
-│  │  ├─ test
-│  │  │  ├─ app.e2e-spec.ts
-│  │  │  └─ jest-e2e.json
-│  │  ├─ tsconfig.build.json
-│  │  └─ tsconfig.json
-│  ├─ frontend
-│  │  ├─ public
-│  │  └─ src
-│  │     ├─ components
-│  │     ├─ pages
-│  │     └─ services
-│  └─ ml-service
-│     ├─ app
-│     ├─ model
-│     └─ scripts
-├─ desktop.ini
-├─ docker-compose.yml
-├─ docs
-│  └─ architecture
-├─ infra
-│  ├─ k8s
-│  │  ├─ base
-│  │  │  ├─ api
-│  │  │  ├─ frontend
-│  │  │  ├─ ingress
-│  │  │  ├─ ml-service
-│  │  │  └─ postgres
-│  │  ├─ nginx-deployment.yaml
-│  │  ├─ nginx-service.yaml
-│  │  └─ observability
-│  │     ├─ alertmanager
-│  │     ├─ grafana
-│  │     ├─ grafana-alloy
-│  │     ├─ loki
-│  │     └─ prometheus
-│  └─ terraform
-│     ├─ environments
-│     │  └─ local
-│     └─ modules
-│        └─ kind-cluster
-│           ├─ .terraform.lock.hcl
-│           ├─ main.tf
-│           ├─ outputs.tf
-│           └─ variables.tf
-└─ scripts
+.
+├── apps/
+│   ├── backend/          # API NestJS + Prisma
+│   ├── frontend/         # Angular
+│   └── ml-service/       # FastAPI + scikit-learn
+├── infra/
+│   ├── terraform/
+│   │   ├── environments/local/
+│   │   └── modules/kind-cluster/   # main.tf, variables.tf, outputs.tf
+│   └── k8s/
+│       ├── base/                   # api, postgres, ml-service, frontend, ingress
+│       └── observability/          # loki, grafana-alloy, grafana (+ dashboards),
+│                                   # prometheus, alertmanager, install.sh
+├── docs/architecture/    # documentation détaillée par phase
+└── .github/workflows/    # CI/CD par service
+```
 
-```
-```
-AiOps
-├─ README.md
-├─ apps
-│  ├─ backend
-│  │  ├─ .dockerignore
-│  │  ├─ .eslintrc.js
-│  │  ├─ .prettierrc
-│  │  ├─ Dockerfile
-│  │  ├─ README.md
-│  │  ├─ nest-cli.json
-│  │  ├─ package-lock.json
-│  │  ├─ package.json
-│  │  ├─ prisma
-│  │  │  ├─ migrations
-│  │  │  │  ├─ 20260831222244_init
-│  │  │  │  │  └─ migration.sql
-│  │  │  │  └─ migration_lock.toml
-│  │  │  └─ schema.prisma
-│  │  ├─ src
-│  │  │  ├─ anomalies
-│  │  │  │  └─ dto
-│  │  │  ├─ app.controller.spec.ts
-│  │  │  ├─ app.controller.ts
-│  │  │  ├─ app.module.ts
-│  │  │  ├─ app.service.ts
-│  │  │  ├─ common
-│  │  │  │  └─ health.controller.ts
-│  │  │  ├─ main.ts
-│  │  │  ├─ prisma
-│  │  │  │  ├─ prisma.module.ts
-│  │  │  │  └─ prisma.service.ts
-│  │  │  └─ tasks
-│  │  │     ├─ dto
-│  │  │     │  ├─ create-task.dto.ts
-│  │  │     │  └─ update-task.dto.ts
-│  │  │     ├─ tasks.controller.ts
-│  │  │     ├─ tasks.module.ts
-│  │  │     └─ tasks.service.ts
-│  │  ├─ test
-│  │  │  ├─ app.e2e-spec.ts
-│  │  │  └─ jest-e2e.json
-│  │  ├─ tsconfig.build.json
-│  │  └─ tsconfig.json
-│  ├─ frontend
-│  │  ├─ public
-│  │  └─ src
-│  │     ├─ components
-│  │     ├─ pages
-│  │     └─ services
-│  └─ ml-service
-│     ├─ app
-│     ├─ model
-│     └─ scripts
-├─ desktop.ini
-├─ docker-compose.yml
-├─ docs
-│  └─ architecture
-├─ infra
-│  ├─ k8s
-│  │  ├─ base
-│  │  │  ├─ api
-│  │  │  │  ├─ configmap.yaml
-│  │  │  │  ├─ deployment.yaml
-│  │  │  │  ├─ secret.yaml
-│  │  │  │  └─ service.yaml
-│  │  │  ├─ frontend
-│  │  │  ├─ ingress
-│  │  │  │  └─ ingress.yaml
-│  │  │  ├─ ml-service
-│  │  │  ├─ namespace.yaml
-│  │  │  └─ postgres
-│  │  │     ├─ configmap.yaml
-│  │  │     ├─ secret.yaml
-│  │  │     ├─ service.yaml
-│  │  │     └─ statefulset.yaml
-│  │  ├─ nginx-deployment.yaml
-│  │  ├─ nginx-service.yaml
-│  │  └─ observability
-│  │     ├─ alertmanager
-│  │     ├─ grafana
-│  │     ├─ grafana-alloy
-│  │     ├─ loki
-│  │     └─ prometheus
-│  └─ terraform
-│     ├─ environments
-│     │  └─ local
-│     └─ modules
-│        └─ kind-cluster
-│           ├─ .terraform.lock.hcl
-│           ├─ main.tf
-│           ├─ outputs.tf
-│           └─ variables.tf
-└─ scripts
+## Prérequis
 
-```
-```
-AiOps
-├─ README.md
-├─ apps
-│  ├─ backend
-│  │  ├─ .dockerignore
-│  │  ├─ .eslintrc.js
-│  │  ├─ .prettierrc
-│  │  ├─ Dockerfile
-│  │  ├─ README.md
-│  │  ├─ nest-cli.json
-│  │  ├─ package-lock.json
-│  │  ├─ package.json
-│  │  ├─ prisma
-│  │  │  ├─ migrations
-│  │  │  │  ├─ 20260831222244_init
-│  │  │  │  │  └─ migration.sql
-│  │  │  │  └─ migration_lock.toml
-│  │  │  └─ schema.prisma
-│  │  ├─ src
-│  │  │  ├─ anomalies
-│  │  │  │  └─ dto
-│  │  │  ├─ app.controller.spec.ts
-│  │  │  ├─ app.controller.ts
-│  │  │  ├─ app.module.ts
-│  │  │  ├─ app.service.ts
-│  │  │  ├─ common
-│  │  │  │  └─ health.controller.ts
-│  │  │  ├─ main.ts
-│  │  │  ├─ prisma
-│  │  │  │  ├─ prisma.module.ts
-│  │  │  │  └─ prisma.service.ts
-│  │  │  └─ tasks
-│  │  │     ├─ dto
-│  │  │     │  ├─ create-task.dto.ts
-│  │  │     │  └─ update-task.dto.ts
-│  │  │     ├─ tasks.controller.ts
-│  │  │     ├─ tasks.module.ts
-│  │  │     └─ tasks.service.ts
-│  │  ├─ test
-│  │  │  ├─ app.e2e-spec.ts
-│  │  │  └─ jest-e2e.json
-│  │  ├─ tsconfig.build.json
-│  │  └─ tsconfig.json
-│  ├─ frontend
-│  │  ├─ public
-│  │  └─ src
-│  │     ├─ components
-│  │     ├─ pages
-│  │     └─ services
-│  └─ ml-service
-│     ├─ app
-│     ├─ model
-│     └─ scripts
-├─ desktop.ini
-├─ docker-compose.yml
-├─ docs
-│  └─ architecture
-│     └─ phase-6-observability.md
-├─ infra
-│  ├─ k8s
-│  │  ├─ base
-│  │  │  ├─ api
-│  │  │  │  ├─ configmap.yaml
-│  │  │  │  ├─ deployment.yaml
-│  │  │  │  ├─ secret.yaml
-│  │  │  │  └─ service.yaml
-│  │  │  ├─ frontend
-│  │  │  ├─ ingress
-│  │  │  │  └─ ingress.yaml
-│  │  │  ├─ ml-service
-│  │  │  ├─ namespace.yaml
-│  │  │  └─ postgres
-│  │  │     ├─ configmap.yaml
-│  │  │     ├─ secret.yaml
-│  │  │     ├─ service.yaml
-│  │  │     └─ statefulset.yaml
-│  │  ├─ nginx-deployment.yaml
-│  │  ├─ nginx-service.yaml
-│  │  └─ observability
-│  │     ├─ alertmanager
-│  │     ├─ grafana
-│  │     │  └─ values-grafana.yaml
-│  │     ├─ grafana-alloy
-│  │     │  └─ values-alloy.yaml
-│  │     ├─ install.sh
-│  │     ├─ loki
-│  │     │  └─ values-loki.yaml
-│  │     └─ prometheus
-│  └─ terraform
-│     ├─ environments
-│     │  └─ local
-│     └─ modules
-│        └─ kind-cluster
-│           ├─ .terraform.lock.hcl
-│           ├─ main.tf
-│           ├─ outputs.tf
-│           └─ variables.tf
-└─ scripts
+Versions utilisées pendant le développement :
 
-```
-```
-AiOps
-├─ README.md
-├─ apps
-│  ├─ backend
-│  │  ├─ .dockerignore
-│  │  ├─ .eslintrc.js
-│  │  ├─ .prettierrc
-│  │  ├─ Dockerfile
-│  │  ├─ README.md
-│  │  ├─ nest-cli.json
-│  │  ├─ package-lock.json
-│  │  ├─ package.json
-│  │  ├─ prisma
-│  │  │  ├─ migrations
-│  │  │  │  ├─ 20260831222244_init
-│  │  │  │  │  └─ migration.sql
-│  │  │  │  └─ migration_lock.toml
-│  │  │  └─ schema.prisma
-│  │  ├─ src
-│  │  │  ├─ anomalies
-│  │  │  │  └─ dto
-│  │  │  ├─ app.controller.spec.ts
-│  │  │  ├─ app.controller.ts
-│  │  │  ├─ app.module.ts
-│  │  │  ├─ app.service.ts
-│  │  │  ├─ common
-│  │  │  │  └─ health.controller.ts
-│  │  │  ├─ main.ts
-│  │  │  ├─ prisma
-│  │  │  │  ├─ prisma.module.ts
-│  │  │  │  └─ prisma.service.ts
-│  │  │  └─ tasks
-│  │  │     ├─ dto
-│  │  │     │  ├─ create-task.dto.ts
-│  │  │     │  └─ update-task.dto.ts
-│  │  │     ├─ tasks.controller.ts
-│  │  │     ├─ tasks.module.ts
-│  │  │     └─ tasks.service.ts
-│  │  ├─ test
-│  │  │  ├─ app.e2e-spec.ts
-│  │  │  └─ jest-e2e.json
-│  │  ├─ tsconfig.build.json
-│  │  └─ tsconfig.json
-│  ├─ frontend
-│  │  ├─ public
-│  │  └─ src
-│  │     ├─ components
-│  │     ├─ pages
-│  │     └─ services
-│  └─ ml-service
-│     ├─ app
-│     │  └─ features
-│     │     └─ feature_engineering.py
-│     ├─ data
-│     │  └─ simulated_logs.jsonl
-│     ├─ model
-│     ├─ requirements.txt
-│     └─ scripts
-│        └─ generate_logs.py
-├─ desktop.ini
-├─ docker-compose.yml
-├─ docs
-│  └─ architecture
-│     └─ phase-6-observability.md
-├─ infra
-│  ├─ k8s
-│  │  ├─ base
-│  │  │  ├─ api
-│  │  │  │  ├─ configmap.yaml
-│  │  │  │  ├─ deployment.yaml
-│  │  │  │  ├─ secret.yaml
-│  │  │  │  └─ service.yaml
-│  │  │  ├─ frontend
-│  │  │  ├─ ingress
-│  │  │  │  └─ ingress.yaml
-│  │  │  ├─ ml-service
-│  │  │  ├─ namespace.yaml
-│  │  │  └─ postgres
-│  │  │     ├─ configmap.yaml
-│  │  │     ├─ secret.yaml
-│  │  │     ├─ service.yaml
-│  │  │     └─ statefulset.yaml
-│  │  ├─ nginx-deployment.yaml
-│  │  ├─ nginx-service.yaml
-│  │  └─ observability
-│  │     ├─ alertmanager
-│  │     ├─ grafana
-│  │     │  └─ values-grafana.yaml
-│  │     ├─ grafana-alloy
-│  │     │  └─ values-alloy.yaml
-│  │     ├─ install.sh
-│  │     ├─ loki
-│  │     │  └─ values-loki.yaml
-│  │     └─ prometheus
-│  └─ terraform
-│     ├─ environments
-│     │  └─ local
-│     └─ modules
-│        └─ kind-cluster
-│           ├─ .terraform.lock.hcl
-│           ├─ main.tf
-│           ├─ outputs.tf
-│           └─ variables.tf
-└─ scripts
+| Outil | Version |
+|---|---|
+| Docker Desktop | 29.7.2 |
+| kind | 0.24.0 |
+| kubectl | 1.37.0 |
+| Terraform | 1.9.5 (provider `tehcyx/kind`) |
+| Helm | 3.22.0 |
+| Node.js | 24.21.0 (build local) |
+| Python | 3.12.3 (build local) |
 
-```
-```
-AiOps
-├─ README.md
-├─ apps
-│  ├─ backend
-│  │  ├─ .dockerignore
-│  │  ├─ .eslintrc.js
-│  │  ├─ .prettierrc
-│  │  ├─ Dockerfile
-│  │  ├─ README.md
-│  │  ├─ nest-cli.json
-│  │  ├─ package-lock.json
-│  │  ├─ package.json
-│  │  ├─ prisma
-│  │  │  ├─ migrations
-│  │  │  │  ├─ 20260831222244_init
-│  │  │  │  │  └─ migration.sql
-│  │  │  │  └─ migration_lock.toml
-│  │  │  └─ schema.prisma
-│  │  ├─ src
-│  │  │  ├─ anomalies
-│  │  │  │  └─ dto
-│  │  │  ├─ app.controller.spec.ts
-│  │  │  ├─ app.controller.ts
-│  │  │  ├─ app.module.ts
-│  │  │  ├─ app.service.ts
-│  │  │  ├─ common
-│  │  │  │  └─ health.controller.ts
-│  │  │  ├─ main.ts
-│  │  │  ├─ prisma
-│  │  │  │  ├─ prisma.module.ts
-│  │  │  │  └─ prisma.service.ts
-│  │  │  └─ tasks
-│  │  │     ├─ dto
-│  │  │     │  ├─ create-task.dto.ts
-│  │  │     │  └─ update-task.dto.ts
-│  │  │     ├─ tasks.controller.ts
-│  │  │     ├─ tasks.module.ts
-│  │  │     └─ tasks.service.ts
-│  │  ├─ test
-│  │  │  ├─ app.e2e-spec.ts
-│  │  │  └─ jest-e2e.json
-│  │  ├─ tsconfig.build.json
-│  │  └─ tsconfig.json
-│  ├─ frontend
-│  │  ├─ public
-│  │  └─ src
-│  │     ├─ components
-│  │     ├─ pages
-│  │     └─ services
-│  └─ ml-service
-│     ├─ .dockerignore
-│     ├─ Dockerfile
-│     ├─ app
-│     │  ├─ features
-│     │  │  └─ feature_engineering.py
-│     │  └─ main.py
-│     ├─ data
-│     │  └─ simulated_logs.jsonl
-│     ├─ model
-│     │  ├─ isolation_forest.joblib
-│     │  └─ train_model.py
-│     ├─ requirements.txt
-│     └─ scripts
-│        └─ generate_logs.py
-├─ desktop.ini
-├─ docker-compose.yml
-├─ docs
-│  └─ architecture
-│     └─ phase-6-observability.md
-├─ infra
-│  ├─ k8s
-│  │  ├─ base
-│  │  │  ├─ api
-│  │  │  │  ├─ configmap.yaml
-│  │  │  │  ├─ deployment.yaml
-│  │  │  │  ├─ secret.yaml
-│  │  │  │  └─ service.yaml
-│  │  │  ├─ frontend
-│  │  │  ├─ ingress
-│  │  │  │  └─ ingress.yaml
-│  │  │  ├─ ml-service
-│  │  │  ├─ namespace.yaml
-│  │  │  └─ postgres
-│  │  │     ├─ configmap.yaml
-│  │  │     ├─ secret.yaml
-│  │  │     ├─ service.yaml
-│  │  │     └─ statefulset.yaml
-│  │  ├─ nginx-deployment.yaml
-│  │  ├─ nginx-service.yaml
-│  │  └─ observability
-│  │     ├─ alertmanager
-│  │     ├─ grafana
-│  │     │  └─ values-grafana.yaml
-│  │     ├─ grafana-alloy
-│  │     │  └─ values-alloy.yaml
-│  │     ├─ install.sh
-│  │     ├─ loki
-│  │     │  └─ values-loki.yaml
-│  │     └─ prometheus
-│  └─ terraform
-│     ├─ environments
-│     │  └─ local
-│     └─ modules
-│        └─ kind-cluster
-│           ├─ .terraform.lock.hcl
-│           ├─ main.tf
-│           ├─ outputs.tf
-│           └─ variables.tf
-├─ requirements.txt
-└─ scripts
+Il faut aussi :
 
-```
-```
-AiOps
-├─ README.md
-├─ apps
-│  ├─ backend
-│  │  ├─ .dockerignore
-│  │  ├─ .eslintrc.js
-│  │  ├─ .prettierrc
-│  │  ├─ Dockerfile
-│  │  ├─ README.md
-│  │  ├─ nest-cli.json
-│  │  ├─ package-lock.json
-│  │  ├─ package.json
-│  │  ├─ prisma
-│  │  │  ├─ migrations
-│  │  │  │  ├─ 20260831222244_init
-│  │  │  │  │  └─ migration.sql
-│  │  │  │  ├─ 20260916212511_add_anomaly_model
-│  │  │  │  │  └─ migration.sql
-│  │  │  │  └─ migration_lock.toml
-│  │  │  └─ schema.prisma
-│  │  ├─ src
-│  │  │  ├─ anomalies
-│  │  │  │  ├─ anomalies.controller.ts
-│  │  │  │  ├─ anomalies.module.ts
-│  │  │  │  ├─ anomalies.service.ts
-│  │  │  │  └─ dto
-│  │  │  │     └─ create-anomaly.dto.ts
-│  │  │  ├─ app.controller.spec.ts
-│  │  │  ├─ app.controller.ts
-│  │  │  ├─ app.module.ts
-│  │  │  ├─ app.service.ts
-│  │  │  ├─ common
-│  │  │  │  └─ health.controller.ts
-│  │  │  ├─ main.ts
-│  │  │  ├─ prisma
-│  │  │  │  ├─ prisma.module.ts
-│  │  │  │  └─ prisma.service.ts
-│  │  │  └─ tasks
-│  │  │     ├─ dto
-│  │  │     │  ├─ create-task.dto.ts
-│  │  │     │  └─ update-task.dto.ts
-│  │  │     ├─ tasks.controller.ts
-│  │  │     ├─ tasks.module.ts
-│  │  │     └─ tasks.service.ts
-│  │  ├─ test
-│  │  │  ├─ app.e2e-spec.ts
-│  │  │  └─ jest-e2e.json
-│  │  ├─ tsconfig.build.json
-│  │  └─ tsconfig.json
-│  ├─ frontend
-│  │  ├─ public
-│  │  └─ src
-│  │     ├─ components
-│  │     ├─ pages
-│  │     └─ services
-│  └─ ml-service
-│     ├─ .dockerignore
-│     ├─ Dockerfile
-│     ├─ app
-│     │  ├─ features
-│     │  │  ├─ feature_engineering.py
-│     │  │  └─ loki_adapter.py
-│     │  ├─ loki_client.py
-│     │  ├─ main.py
-│     │  └─ predict.py
-│     ├─ data
-│     │  └─ simulated_logs.jsonl
-│     ├─ model
-│     │  ├─ isolation_forest.joblib
-│     │  └─ train_model.py
-│     ├─ requirements.txt
-│     ├─ scripts
-│     │  └─ generate_logs.py
-│     └─ test_loki.py
-├─ desktop.ini
-├─ docker-compose.yml
-├─ docs
-│  └─ architecture
-│     └─ phase-6-observability.md
-├─ infra
-│  ├─ k8s
-│  │  ├─ base
-│  │  │  ├─ api
-│  │  │  │  ├─ configmap.yaml
-│  │  │  │  ├─ deployment.yaml
-│  │  │  │  ├─ secret.yaml
-│  │  │  │  └─ service.yaml
-│  │  │  ├─ frontend
-│  │  │  ├─ ingress
-│  │  │  │  └─ ingress.yaml
-│  │  │  ├─ ml-service
-│  │  │  ├─ namespace.yaml
-│  │  │  └─ postgres
-│  │  │     ├─ configmap.yaml
-│  │  │     ├─ secret.yaml
-│  │  │     ├─ service.yaml
-│  │  │     └─ statefulset.yaml
-│  │  ├─ nginx-deployment.yaml
-│  │  ├─ nginx-service.yaml
-│  │  └─ observability
-│  │     ├─ alertmanager
-│  │     ├─ grafana
-│  │     │  └─ values-grafana.yaml
-│  │     ├─ grafana-alloy
-│  │     │  └─ values-alloy.yaml
-│  │     ├─ install.sh
-│  │     ├─ loki
-│  │     │  └─ values-loki.yaml
-│  │     └─ prometheus
-│  └─ terraform
-│     ├─ environments
-│     │  └─ local
-│     └─ modules
-│        └─ kind-cluster
-│           ├─ .terraform.lock.hcl
-│           ├─ main.tf
-│           ├─ outputs.tf
-│           └─ variables.tf
-└─ scripts
+- un runner GitHub Actions self-hosted actif sur la machine (voir plus bas) ;
+- un webhook Slack entrant pour les alertes ;
+- un PAT GitHub avec les scopes `repo` **et** `workflow` (sinon les push vers `.github/workflows/` sont refusés).
 
-```
-```
-AiOps
-├─ README.md
-├─ apps
-│  ├─ backend
-│  │  ├─ .dockerignore
-│  │  ├─ .eslintrc.js
-│  │  ├─ .prettierrc
-│  │  ├─ Dockerfile
-│  │  ├─ README.md
-│  │  ├─ nest-cli.json
-│  │  ├─ package-lock.json
-│  │  ├─ package.json
-│  │  ├─ prisma
-│  │  │  ├─ migrations
-│  │  │  │  ├─ 20260831222244_init
-│  │  │  │  │  └─ migration.sql
-│  │  │  │  ├─ 20260916212511_add_anomaly_model
-│  │  │  │  │  └─ migration.sql
-│  │  │  │  └─ migration_lock.toml
-│  │  │  └─ schema.prisma
-│  │  ├─ src
-│  │  │  ├─ anomalies
-│  │  │  │  ├─ anomalies.controller.ts
-│  │  │  │  ├─ anomalies.module.ts
-│  │  │  │  ├─ anomalies.service.ts
-│  │  │  │  └─ dto
-│  │  │  │     └─ create-anomaly.dto.ts
-│  │  │  ├─ app.controller.spec.ts
-│  │  │  ├─ app.controller.ts
-│  │  │  ├─ app.module.ts
-│  │  │  ├─ app.service.ts
-│  │  │  ├─ common
-│  │  │  │  └─ health.controller.ts
-│  │  │  ├─ main.ts
-│  │  │  ├─ prisma
-│  │  │  │  ├─ prisma.module.ts
-│  │  │  │  └─ prisma.service.ts
-│  │  │  └─ tasks
-│  │  │     ├─ dto
-│  │  │     │  ├─ create-task.dto.ts
-│  │  │     │  └─ update-task.dto.ts
-│  │  │     ├─ tasks.controller.ts
-│  │  │     ├─ tasks.module.ts
-│  │  │     └─ tasks.service.ts
-│  │  ├─ test
-│  │  │  ├─ app.e2e-spec.ts
-│  │  │  └─ jest-e2e.json
-│  │  ├─ tsconfig.build.json
-│  │  └─ tsconfig.json
-│  ├─ frontend
-│  │  ├─ public
-│  │  └─ src
-│  │     ├─ components
-│  │     ├─ pages
-│  │     └─ services
-│  └─ ml-service
-│     ├─ .dockerignore
-│     ├─ Dockerfile
-│     ├─ app
-│     │  ├─ backend_client.py
-│     │  ├─ features
-│     │  │  ├─ feature_engineering.py
-│     │  │  └─ loki_adapter.py
-│     │  ├─ loki_client.py
-│     │  ├─ main.py
-│     │  └─ predict.py
-│     ├─ data
-│     │  └─ simulated_logs.jsonl
-│     ├─ model
-│     │  ├─ isolation_forest.joblib
-│     │  └─ train_model.py
-│     ├─ requirements.txt
-│     ├─ scripts
-│     │  └─ generate_logs.py
-│     └─ test_loki.py
-├─ desktop.ini
-├─ docker-compose.yml
-├─ docs
-│  └─ architecture
-│     └─ phase-6-observability.md
-├─ infra
-│  ├─ k8s
-│  │  ├─ base
-│  │  │  ├─ api
-│  │  │  │  ├─ configmap.yaml
-│  │  │  │  ├─ deployment.yaml
-│  │  │  │  ├─ secret.yaml
-│  │  │  │  └─ service.yaml
-│  │  │  ├─ frontend
-│  │  │  ├─ ingress
-│  │  │  │  └─ ingress.yaml
-│  │  │  ├─ ml-service
-│  │  │  ├─ namespace.yaml
-│  │  │  └─ postgres
-│  │  │     ├─ configmap.yaml
-│  │  │     ├─ secret.yaml
-│  │  │     ├─ service.yaml
-│  │  │     └─ statefulset.yaml
-│  │  ├─ nginx-deployment.yaml
-│  │  ├─ nginx-service.yaml
-│  │  └─ observability
-│  │     ├─ alertmanager
-│  │     ├─ grafana
-│  │     │  └─ values-grafana.yaml
-│  │     ├─ grafana-alloy
-│  │     │  └─ values-alloy.yaml
-│  │     ├─ install.sh
-│  │     ├─ loki
-│  │     │  └─ values-loki.yaml
-│  │     └─ prometheus
-│  └─ terraform
-│     ├─ environments
-│     │  └─ local
-│     └─ modules
-│        └─ kind-cluster
-│           ├─ .terraform.lock.hcl
-│           ├─ main.tf
-│           ├─ outputs.tf
-│           └─ variables.tf
-└─ scripts
+## Déploiement de zéro
 
-```
-```
-AiOps
-├─ README.md
-├─ apps
-│  ├─ backend
-│  │  ├─ .dockerignore
-│  │  ├─ .eslintrc.js
-│  │  ├─ .prettierrc
-│  │  ├─ Dockerfile
-│  │  ├─ README.md
-│  │  ├─ nest-cli.json
-│  │  ├─ package-lock.json
-│  │  ├─ package.json
-│  │  ├─ prisma
-│  │  │  ├─ migrations
-│  │  │  │  ├─ 20260831222244_init
-│  │  │  │  │  └─ migration.sql
-│  │  │  │  ├─ 20260916212511_add_anomaly_model
-│  │  │  │  │  └─ migration.sql
-│  │  │  │  └─ migration_lock.toml
-│  │  │  └─ schema.prisma
-│  │  ├─ src
-│  │  │  ├─ anomalies
-│  │  │  │  ├─ anomalies.controller.ts
-│  │  │  │  ├─ anomalies.module.ts
-│  │  │  │  ├─ anomalies.service.ts
-│  │  │  │  └─ dto
-│  │  │  │     └─ create-anomaly.dto.ts
-│  │  │  ├─ app.controller.spec.ts
-│  │  │  ├─ app.controller.ts
-│  │  │  ├─ app.module.ts
-│  │  │  ├─ app.service.ts
-│  │  │  ├─ common
-│  │  │  │  └─ health.controller.ts
-│  │  │  ├─ main.ts
-│  │  │  ├─ prisma
-│  │  │  │  ├─ prisma.module.ts
-│  │  │  │  └─ prisma.service.ts
-│  │  │  └─ tasks
-│  │  │     ├─ dto
-│  │  │     │  ├─ create-task.dto.ts
-│  │  │     │  └─ update-task.dto.ts
-│  │  │     ├─ tasks.controller.ts
-│  │  │     ├─ tasks.module.ts
-│  │  │     └─ tasks.service.ts
-│  │  ├─ test
-│  │  │  ├─ app.e2e-spec.ts
-│  │  │  └─ jest-e2e.json
-│  │  ├─ tsconfig.build.json
-│  │  └─ tsconfig.json
-│  ├─ frontend
-│  │  ├─ public
-│  │  └─ src
-│  │     ├─ components
-│  │     ├─ pages
-│  │     └─ services
-│  └─ ml-service
-│     ├─ .dockerignore
-│     ├─ Dockerfile
-│     ├─ app
-│     │  ├─ backend_client.py
-│     │  ├─ features
-│     │  │  ├─ feature_engineering.py
-│     │  │  └─ loki_adapter.py
-│     │  ├─ loki_client.py
-│     │  ├─ main.py
-│     │  └─ predict.py
-│     ├─ data
-│     │  └─ simulated_logs.jsonl
-│     ├─ model
-│     │  ├─ isolation_forest.joblib
-│     │  └─ train_model.py
-│     ├─ requirements.txt
-│     ├─ scripts
-│     │  └─ generate_logs.py
-│     └─ test_loki.py
-├─ desktop.ini
-├─ docker-compose.yml
-├─ docs
-│  └─ architecture
-│     └─ phase-6-observability.md
-├─ infra
-│  ├─ k8s
-│  │  ├─ base
-│  │  │  ├─ api
-│  │  │  │  ├─ configmap.yaml
-│  │  │  │  ├─ deployment.yaml
-│  │  │  │  ├─ secret.yaml
-│  │  │  │  └─ service.yaml
-│  │  │  ├─ frontend
-│  │  │  ├─ ingress
-│  │  │  │  └─ ingress.yaml
-│  │  │  ├─ ml-service
-│  │  │  │  ├─ deployment.yaml
-│  │  │  │  └─ service.yaml
-│  │  │  ├─ namespace.yaml
-│  │  │  └─ postgres
-│  │  │     ├─ configmap.yaml
-│  │  │     ├─ secret.yaml
-│  │  │     ├─ service.yaml
-│  │  │     └─ statefulset.yaml
-│  │  ├─ nginx-deployment.yaml
-│  │  ├─ nginx-service.yaml
-│  │  └─ observability
-│  │     ├─ alertmanager
-│  │     ├─ grafana
-│  │     │  └─ values-grafana.yaml
-│  │     ├─ grafana-alloy
-│  │     │  └─ values-alloy.yaml
-│  │     ├─ install.sh
-│  │     ├─ loki
-│  │     │  └─ values-loki.yaml
-│  │     └─ prometheus
-│  └─ terraform
-│     ├─ environments
-│     │  └─ local
-│     └─ modules
-│        └─ kind-cluster
-│           ├─ .terraform.lock.hcl
-│           ├─ main.tf
-│           ├─ outputs.tf
-│           └─ variables.tf
-└─ scripts
+> Avant tout : `kind get clusters`. Si un ancien cluster traîne, supprime-le (`kind delete cluster --name <nom>`). Deux clusters kind simultanés cassent la résolution DNS et bloquent les pulls d'images.
 
+### 1. Cluster (Terraform)
+
+```bash
+cd infra/terraform/modules/kind-cluster
+terraform init
+terraform apply
 ```
+
+Terraform crée uniquement le cluster kind `aiops-cluster-tf` (provider `tehcyx/kind`). Tout le reste est déployé avec `kubectl` et `helm`.
+
+### 2. Ingress Nginx et namespaces
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/kind/deploy.yaml
+kubectl wait -n ingress-nginx --for=condition=ready pod -l app.kubernetes.io/component=controller --timeout=180s
+
+kubectl create namespace aiops --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
+```
+
+### 3. Secrets (créés à la main, jamais versionnés)
+
+| Secret | Namespace | Rôle |
+|---|---|---|
+| `postgres-secret` | `aiops` | Clés `DATABASE_URL` et `POSTGRES_PASSWORD` |
+| `api-secret` | `aiops` | Clé `DATABASE_URL` (utilisée par Prisma) |
+| `alertmanager-slack-webhook` | `observability` | Clé `webhook_url` |
+
+```bash
+kubectl create secret generic postgres-secret -n aiops \
+  --from-literal=POSTGRES_PASSWORD='<MOT_DE_PASSE>' \
+  --from-literal=DATABASE_URL='postgresql://postgres:<MOT_DE_PASSE>@postgres-service.aiops.svc.cluster.local:5432/taskmanager'
+
+kubectl create secret generic api-secret -n aiops \
+  --from-literal=DATABASE_URL='postgresql://postgres:<MOT_DE_PASSE>@postgres-service.aiops.svc.cluster.local:5432/taskmanager'
+
+kubectl create secret generic alertmanager-slack-webhook -n observability \
+  --from-literal=webhook_url='<URL_WEBHOOK_SLACK>'
+```
+
+`postgres-service` est le Service headless de PostgreSQL dans le namespace `aiops`. Le mot de passe doit être identique dans les trois valeurs.
+
+Le Secret `grafana` (identifiants admin) est généré par le chart Helm.
+
+### 4. Base de données et backend
+
+```bash
+kubectl apply -f infra/k8s/base/postgres/
+kubectl rollout status statefulset/postgres -n aiops --timeout=300s
+kubectl apply -f infra/k8s/base/api/
+kubectl rollout status deployment/api -n aiops --timeout=300s
+```
+
+Le ConfigMap `postgres-config` fixe `POSTGRES_DB=taskmanager` et `POSTGRES_USER=postgres`. L'image du backend vient de `ghcr.io/abdelkarim-ensi/aiops-backend:latest`.
+
+### 5. Observabilité (Loki, Alloy, Grafana)
+
+```bash
+./infra/k8s/observability/install.sh
+```
+
+Le script fait `helm upgrade --install` de `loki`, `alloy` et `grafana` (repo `grafana/*`). Les dashboards Grafana sont dans `infra/k8s/observability/grafana/dashboards` (voir `docs/architecture/phase-9-prometheus-grafana.md`).
+
+### 6. Service ML
+
+L'image est construite localement et chargée dans le cluster (elle n'est pas tirée d'un registre) :
+
+```bash
+docker build -t aiops-ml-service:dev apps/ml-service
+kind load docker-image aiops-ml-service:dev --name aiops-cluster-tf
+kubectl apply -f infra/k8s/base/ml-service/
+```
+
+Configuration via le ConfigMap `ml-service-config` :
+
+| Variable | Valeur |
+|---|---|
+| `LOKI_URL` | `http://loki.observability.svc.cluster.local:3100` |
+| `LOKI_TENANT_ID` | `aiops` |
+| `LOKI_QUERY` | `{namespace="aiops", container="api"}` |
+| `BACKEND_URL` | `http://api-service.aiops.svc.cluster.local:3000` |
+
+### 7. Prometheus et Alertmanager (manuel, hors CI)
+
+Le Secret `alertmanager-slack-webhook` (étape 3) doit exister avant l'installation : Alertmanager le monte pour lire l'URL du webhook.
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+cd infra/k8s/observability/prometheus
+helm upgrade --install prometheus prometheus-community/prometheus -n observability \
+  --version 29.31.1 \
+  -f values-prometheus.yaml -f values-alertmanager.yaml
+```
+
+Ce chart n'est pas `kube-prometheus-stack` : il n'y a pas de CRD `PrometheusRule`, les règles d'alerte sont dans les values (`serverFiles.alerting_rules.yml`). La règle `AnomalyScoreHigh` se déclenche quand `ml_anomaly_score_latest > 0.7` (sévérité `critical`) et notifie Slack. Détails : `docs/architecture/phase-9-prometheus-grafana.md` et `docs/architecture/phase-11-alerting.md`. Ce déploiement ne passe pas par la CI.
+
+### 8. Frontend et Ingress
+
+```bash
+kubectl apply -f infra/k8s/base/frontend/
+kubectl apply -f infra/k8s/base/ingress/
+```
+
+Deux objets Ingress coexistent sur le host `localhost` : `/` vers `frontend-service` et `/api` vers `api-service`, avec réécriture du préfixe uniquement pour `/api`. L'annotation `rewrite-target` s'applique à tout un objet Ingress, d'où la séparation ; ingress-nginx fusionne les deux (voir `docs/architecture/phase-10-frontend-dashboard.md`).
+
+### 9. Vérification
+
+```bash
+kubectl get pods -A
+curl -I http://localhost/
+```
+
+Tous les pods des namespaces `aiops`, `observability` et `ingress-nginx` doivent être `Running` / `Ready`.
+
+## Accès
+
+| Service | URL |
+|---|---|
+| Dashboard | http://localhost/dashboard |
+| Anomalies | http://localhost/anomalies |
+| API | http://localhost/api |
+| Grafana | `kubectl port-forward -n observability svc/grafana 3000:80` → http://localhost:3000 |
+| Prometheus | `kubectl port-forward -n observability svc/prometheus-server 9090:80` → http://localhost:9090 |
+
+## CI/CD
+
+Un workflow par service (`backend`, `frontend`, `ml-service`) dans `.github/workflows/`, sur le schéma `lint/build/test → docker-build-push → deploy`. Le job `deploy` tourne sur un runner self-hosted et met à jour l'image avec `kubectl set image`.
+
+Le runner doit être lancé et rester actif, sinon les jobs `deploy` restent en attente :
+
+```bash
+cd ~/Projects/actions-runner && ./run.sh
+```
+
+## Documentation détaillée
+
+- [Phase 6 : observabilité](docs/architecture/phase-6-observability.md)
+- [Phase 8 : intégration ML / Loki](docs/architecture/phase-8-ml-loki-integration.md)
+- [Phase 9 : Prometheus et Grafana](docs/architecture/phase-9-prometheus-grafana.md)
+- [Phase 10 : dashboard frontend](docs/architecture/phase-10-frontend-dashboard.md)
+- [Phase 11 : alerting](docs/architecture/phase-11-alerting.md)
+
+## Dépannage
+
+- **Erreurs DNS / pulls d'images bloqués** : vérifier `kind get clusters` et supprimer les clusters en double.
+- **`kind load docker-image` échoue** (digest de manifest multi-plateforme) : faire un `crictl pull` directement dans le nœud une fois le DNS stable.
+- **Tag PostgreSQL** : utiliser `postgres:15-alpine` (le tag `-amd64` n'existe pas).
+- **Secret introuvable** : le nom du Secret doit être identique dans le manifest de Secret et dans le `secretRef` du Deployment.
+- **`extraScrapeConfigs` sans effet** : la clé doit être à la racine du values Prometheus, pas sous `server:`.
+
+## Limites connues
+
+- Pas de LLM : la détection repose uniquement sur un Isolation Forest.
+- Pas de multi-cloud : cluster local kind uniquement.
+- Pas d'authentification OAuth.
+- Déploiement de l'observabilité et création des Secrets manuels, hors CI.
+- Le service ML utilise une image locale (`aiops-ml-service:dev`), à recharger dans kind après chaque build.
+
+## Contact
+
+Abdel Karim Doudey, [@AbdelKarim-Ensi](https://github.com/AbdelKarim-Ensi)
