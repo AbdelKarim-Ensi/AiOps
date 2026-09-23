@@ -155,7 +155,7 @@ Le script fait `helm upgrade --install` de `loki`, `alloy` et `grafana` (repo `g
 
 ### 6. Service ML
 
-L'image est construite localement et chargée dans le cluster (elle n'est pas tirée d'un registre) :
+Le manifest référence l'image locale `aiops-ml-service:dev` : pour l'installation initiale, construis-la et charge-la dans le cluster. Ensuite, la CI publie l'image sur GHCR et met à jour le Deployment avec le tag SHA du commit, sans nouveau `kind load`.
 
 ```bash
 docker build -t aiops-ml-service:dev apps/ml-service
@@ -221,7 +221,7 @@ Tous les pods des namespaces `aiops`, `observability` et `ingress-nginx` doivent
 Un workflow par service (`backend`, `frontend`, `ml-service`) dans `.github/workflows/`, sur le schéma `lint/build/test → docker-build-push → deploy`.
 
 - Les images sont poussées sur GHCR avec deux tags : `latest` et le SHA du commit.
-- Le job `deploy` tourne sur un runner self-hosted : il applique les migrations Prisma (pod éphémère) puis fait `kubectl set image` avec le **tag SHA**, ce qui rend chaque déploiement traçable et réversible (`kubectl rollout undo`). Le tag `latest` des manifests ne sert qu'à l'installation initiale.
+- Le job `deploy` tourne sur un runner self-hosted : il fait `kubectl set image` (pour le backend, après avoir appliqué les migrations Prisma dans un pod éphémère) avec le **tag SHA**, ce qui rend chaque déploiement traçable et réversible (`kubectl rollout undo`). Le tag `latest` des manifests ne sert qu'à l'installation initiale.
 - Secret GitHub requis : `DATABASE_URL` (utilisé pour la migration Prisma).
 
 Le runner doit être lancé et rester actif, sinon les jobs `deploy` restent en attente :
@@ -259,7 +259,7 @@ cd ~/Projects/actions-runner && ./run.sh
 - Pas d'authentification OAuth.
 - Seuil d'alerte fixé à **0.7** au lieu des 0.8 du PRD : 0.8 n'est jamais atteint sur l'échelle réelle du modèle (calibration détaillée dans la phase 11).
 - Déploiement de l'observabilité et création des Secrets manuels, hors CI.
-- Le service ML utilise une image locale (`aiops-ml-service:dev`), à recharger dans kind après chaque build.
+- Le manifest du service ML référence une image locale (`aiops-ml-service:dev`) pour l'installation initiale ; la CI de ce service ne fait qu'une vérification syntaxique (`py_compile`), sans tests unitaires.
 
 ## Contact
 
