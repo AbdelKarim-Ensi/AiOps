@@ -449,7 +449,7 @@ All pods in the `aiops`, `observability` and `ingress-nginx` namespaces must be 
 | Dashboard | http://localhost/dashboard |
 | Anomalies | http://localhost/anomalies |
 | API | http://localhost/api |
-| Grafana | `kubectl port-forward -n observability svc/grafana 3000:80` → http://localhost:3000 |
+| Grafana | `kubectl port-forward -n observability svc/grafana 3001:80` → http://localhost:3001 |
 | Prometheus | `kubectl port-forward -n observability svc/prometheus-server 9090:80` → http://localhost:9090 |
 
 ## CI/CD
