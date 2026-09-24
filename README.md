@@ -34,6 +34,239 @@ flowchart LR
     GRAF --> LOKI
 ```
 
+
+## Quick start (run it locally)
+
+This section is a standalone, copy-pasteable path from a clean clone to a working dashboard. For deeper explanations of each step, see [Deploy from scratch](#deploy-from-scratch) and `docs/architecture/`.
+
+### 1. Prerequisites
+
+Versions used during development (see [Prerequisites](#prerequisites) below for the full list):
+
+| Tool | Version |
+|---|---|
+| Docker Desktop | 29.7.2 |
+| kind | 0.24.0 |
+| kubectl | 1.37.0 |
+| Terraform | 1.9.5 (provider `tehcyx/kind`) |
+| Helm | 3.22.0 |
+
+> **Resources:** not benchmarked precisely in this repo, but the cluster runs Postgres, the API, the ML service, the frontend, Loki, Alloy, Grafana, Prometheus and Alertmanager on a single kind node at once. Give Docker Desktop's VM **at least 4 CPUs / 8 GB RAM**; less than that has been a source of stuck pulls and OOM-killed pods in practice. Treat this as a starting point, not a hard number from the project's docs.
+
+You do **not** need Node.js or Python installed just to run the demo — the backend and frontend images are pulled from GHCR. You only need them if you want to build images locally (see step 4, option B).
+
+### 2. Clone the repo
+
+```bash
+git clone https://github.com/AbdelKarim-Ensi/AiOps.git
+cd AiOps
+```
+
+### 3. Create the kind cluster (Terraform)
+
+```bash
+kind get clusters
+```
+
+If anything is listed, delete it first — running two kind clusters at once breaks DNS resolution and blocks image pulls (see `docs/architecture/phase-4-kind-terraform.md` and `phase-5-k8s-deploy.md`):
+
+```bash
+kind delete cluster --name <old-cluster-name>
+```
+
+Then create the cluster:
+
+```bash
+cd infra/terraform/modules/kind-cluster
+terraform init
+terraform apply
+cd ../../../..
+```
+
+This creates the kind cluster `aiops-cluster-tf` only (provider `tehcyx/kind`). Everything else below is `kubectl`/`helm`.
+
+### 4. Get the container images into the cluster
+
+**Option A — easiest, recommended for a first run.** The backend and frontend Deployments already reference `ghcr.io/abdelkarim-ensi/aiops-backend:latest` and `ghcr.io/abdelkarim-ensi/aiops-frontend:latest` with no `imagePullPolicy` override — since the tag is `latest`, Kubernetes defaults that to `Always`, so the kind node pulls both images from GHCR automatically the first time you `kubectl apply` them in step 5. **You don't need to build anything for these two.**
+
+The ML service is the one exception: its manifest points at a local-only tag, `aiops-ml-service:dev` (`imagePullPolicy: IfNotPresent`), because CI does build and push it to GHCR but the manifest was never switched over (see `docs/architecture/phase-11-alerting.md`, "Known limitations"). For the initial install you must build and load it yourself:
+
+```bash
+docker build -t aiops-ml-service:dev apps/ml-service
+kind load docker-image aiops-ml-service:dev --name aiops-cluster-tf
+```
+
+**Option B — fully local build (no GHCR pull), useful if you want to test your own changes or have no internet access from the cluster.** Build and load all three images the same way:
+
+```bash
+docker build -t aiops-backend:dev apps/backend
+docker build -t aiops-frontend:dev apps/frontend
+docker build -t aiops-ml-service:dev apps/ml-service
+
+kind load docker-image aiops-backend:dev --name aiops-cluster-tf
+kind load docker-image aiops-frontend:dev --name aiops-cluster-tf
+kind load docker-image aiops-ml-service:dev --name aiops-cluster-tf
+```
+
+Note: this repo's manifests are not parameterized for local tags, so for the backend and frontend you'd need to edit `infra/k8s/base/api/deployment.yaml` and `infra/k8s/base/frontend/deployment.yaml` yourself (change `image:` to `aiops-backend:dev` / `aiops-frontend:dev` and set `imagePullPolicy: IfNotPresent`) before applying them in step 5. This isn't scripted anywhere in the repo — option A is the path that works out of the box.
+
+### 5. Ingress controller, namespaces, and Secrets
+
+Install the ingress-nginx controller (kind's own manifest) and wait for it to be ready:
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/kind/deploy.yaml
+kubectl wait -n ingress-nginx --for=condition=ready pod -l app.kubernetes.io/component=controller --timeout=180s
+```
+
+Create the namespaces:
+
+```bash
+kubectl create namespace aiops --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Create the Secrets by hand — **never commit real values**:
+
+| Secret | Namespace | Keys |
+|---|---|---|
+| `postgres-secret` | `aiops` | `POSTGRES_PASSWORD`, `DATABASE_URL` |
+| `api-secret` | `aiops` | `DATABASE_URL` |
+| `alertmanager-slack-webhook` | `observability` | `webhook_url` |
+
+```bash
+kubectl create secret generic postgres-secret -n aiops \
+  --from-literal=POSTGRES_PASSWORD='<your-postgres-password>' \
+  --from-literal=DATABASE_URL='postgresql://postgres:<your-postgres-password>@postgres-service.aiops.svc.cluster.local:5432/taskmanager'
+
+kubectl create secret generic api-secret -n aiops \
+  --from-literal=DATABASE_URL='postgresql://postgres:<your-postgres-password>@postgres-service.aiops.svc.cluster.local:5432/taskmanager'
+```
+
+The password must be identical in all three `DATABASE_URL`/`POSTGRES_PASSWORD` values above. Templates are also available at `infra/k8s/base/postgres/secret.yaml.example` and `infra/k8s/base/api/secret.yaml.example` if you'd rather copy them to `secret.yaml` (git-ignored), fill in the values, and `kubectl apply -f` them instead.
+
+For `alertmanager-slack-webhook`, see the "Slack alerting is optional" note at the end of this section before creating it.
+
+### 6. Database, backend, ML service, frontend, and Ingress
+
+```bash
+kubectl apply -f infra/k8s/base/postgres/
+kubectl rollout status statefulset/postgres -n aiops --timeout=300s
+
+kubectl apply -f infra/k8s/base/api/
+kubectl rollout status deployment/api -n aiops --timeout=300s
+```
+
+### 7. Observability stack (Loki, Alloy, Grafana)
+
+```bash
+chmod +x infra/k8s/observability/install.sh
+./infra/k8s/observability/install.sh
+```
+
+This installs Loki (`grafana/loki` v7.3.0), Grafana Alloy, and Grafana in that order via `helm upgrade --install`.
+
+Now apply the ML service (image was built/loaded in step 4):
+
+```bash
+kubectl apply -f infra/k8s/base/ml-service/
+```
+
+Install Prometheus + Alertmanager:
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+cd infra/k8s/observability/prometheus
+helm upgrade --install prometheus prometheus-community/prometheus -n observability \
+  --version 29.31.1 \
+  -f values-prometheus.yaml -f values-alertmanager.yaml
+cd ../../../..
+```
+
+> If you have no Slack webhook, drop `-f values-alertmanager.yaml` from this command — see the note at the end of this section.
+
+Load the Grafana dashboard (the sidecar auto-discovers ConfigMaps labelled `grafana_dashboard=1`):
+
+```bash
+kubectl create configmap aiops-metrics-dashboard -n observability \
+  --from-file=aiops-metrics.json=infra/k8s/observability/grafana/dashboards/aiops-metrics.json \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl label configmap aiops-metrics-dashboard -n observability grafana_dashboard=1 --overwrite
+```
+
+Finally, the frontend and the Ingress rules:
+
+```bash
+kubectl apply -f infra/k8s/base/frontend/
+kubectl apply -f infra/k8s/base/ingress/
+```
+
+### 8. Verify everything is up
+
+```bash
+kubectl get pods -A
+```
+
+Expect every pod in the `aiops`, `observability`, and `ingress-nginx` namespaces to be `Running`/`Ready` (this can take a few minutes on the first run while images pull).
+
+```bash
+curl -I http://localhost/
+curl -s http://localhost/api/health
+curl -s http://localhost/api/anomalies/stats
+```
+
+Open the dashboard in a browser: **http://localhost/dashboard** (or **http://localhost/** — the frontend Ingress rule matches `/` and serves the Angular app; the anomaly list is at `/anomalies`).
+
+Grafana:
+
+```bash
+kubectl -n observability port-forward svc/grafana 3001:80
+```
+→ http://localhost:3001 (`admin` / `admin` — see [Known limitations](#known-limitations))
+
+Prometheus:
+
+```bash
+kubectl port-forward -n observability svc/prometheus-server 9090:80
+```
+→ http://localhost:9090
+
+### 9. Generate a demo anomaly
+
+```bash
+for i in $(seq 1 60); do
+  curl -s -X POST http://localhost/api/tasks/simulate-failure > /dev/null
+  sleep 1
+done
+```
+
+The ML service analyses fixed 5-minute windows. The anomaly score only updates when the *current* window closes, so depending on when in that window you start the burst, it can take **up to 5 minutes** for the score to update and the anomaly to show up in the dashboard/Grafana. If Slack alerting is configured, the `AnomalyScoreHigh` alert (`ml_anomaly_score_latest > 0.7`) fires within about a minute after that window closes.
+
+### 10. Cleanup
+
+```bash
+cd infra/terraform/modules/kind-cluster
+terraform destroy
+```
+
+This tears down the whole kind cluster (`aiops-cluster-tf`) in one shot — no need to `kubectl delete` anything separately.
+
+### Slack alerting is optional
+
+If you don't have a Slack incoming webhook, you can skip alerting entirely and still get the full ML/dashboard/metrics demo:
+
+- Skip creating the `alertmanager-slack-webhook` Secret.
+- In step 7, install Prometheus **without** `-f values-alertmanager.yaml`:
+```bash
+  helm upgrade --install prometheus prometheus-community/prometheus -n observability \
+    --version 29.31.1 \
+    -f values-prometheus.yaml
+```
+  (Alertmanager stays disabled — it's off by default in `values-prometheus.yaml` — so there's no Secret for it to mount.)
+- Everything else (dashboard, anomaly list, Grafana, Prometheus metrics) works the same either way.
+
 ## Tech stack
 
 | Layer | Technologies |
