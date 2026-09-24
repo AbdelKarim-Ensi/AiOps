@@ -1,113 +1,115 @@
-# Phase 10 : Frontend Angular (dashboard des anomalies)
+# Phase 10: Angular frontend (anomaly dashboard)
 
-Branche : `phase-10-frontend-dashboard`
+Branch: `phase-10-frontend-dashboard`
 
-## Objectif
+## Goal
 
-Donner une interface web à la détection d'anomalies : afficher les statistiques, lister les fenêtres de logs détectées comme anormales, consulter le détail d'une anomalie et la marquer comme faux positif. Le frontend est conteneurisé, déployé sur le cluster kind à côté de l'API, et construit par une pipeline CI dédiée.
+Give the anomaly detection a web interface: display statistics, list the log windows detected as abnormal, view the detail of an anomaly and mark it as a false positive. The frontend is containerised, deployed on the kind cluster next to the API, and built by a dedicated CI pipeline.
 
-## Sous-tâches et commits
+## Subtasks and commits
 
-| Sous-tâche | Contenu | Commit |
+| Subtask | Content | Commit |
 |---|---|---|
-| 10.1 | Backend : filtres, pagination, stats, détail | `10a5d95` |
-| 10.2 | Scaffold Angular et proxy `/api` | `4f1ee7e` |
-| 10.3 | Modèles et service HTTP des anomalies | `36ff2b3` |
-| 10.4 | Dashboard : design, icônes Lucide, mode sombre, badges | `a5b1b82` |
-| 10.5 | Vue liste des anomalies | `b9072a3` |
-| 10.6 | Vue détail d'une anomalie | `a4b5934` |
-| 10.7 | Dockerfile multi-stage et nginx | `aa81967` |
-| 10.8 | Manifests K8s et Ingress (`/api` et `/`) | `fcceefd` |
-| 10.9 | Pipeline `frontend-ci.yml`, correction de `app.spec.ts` | `171662e` |
-| 10.10 | Cette documentation | |
+| 10.1 | Backend: filters, pagination, stats, detail | `10a5d95` |
+| 10.2 | Angular scaffold and `/api` proxy | `4f1ee7e` |
+| 10.3 | Anomaly models and HTTP service | `36ff2b3` |
+| 10.4 | Dashboard: design, Lucide icons, dark mode, badges | `a5b1b82` |
+| 10.5 | Anomaly list view | `b9072a3` |
+| 10.6 | Anomaly detail view | `a4b5934` |
+| 10.7 | Multi-stage Dockerfile and nginx | `aa81967` |
+| 10.8 | K8s manifests and Ingress (`/api` and `/`) | `fcceefd` |
+| 10.9 | `frontend-ci.yml` pipeline, `app.spec.ts` fix | `171662e` |
+| 10.10 | This documentation | |
 
 ## Architecture
 
 ```
-Navigateur
+Browser
    │
    ▼
 Ingress nginx (localhost:80)
-   ├── /api/...  ──(réécriture : /api retiré)──▶ api-service:3000   (NestJS)
+   ├── /api/...  ──(rewrite: /api removed)──▶ api-service:3000   (NestJS)
    └── /         ─────────────────────────────▶ frontend-service:80 (nginx + Angular)
 ```
 
-En développement, `ng serve` joue le rôle de l'Ingress : `proxy.conf.json` envoie `/api` vers `http://localhost:3000` en retirant le préfixe `/api`. En cluster, c'est l'Ingress qui fait cette réécriture. Le code Angular appelle toujours `/api/anomalies` et ne change pas d'un environnement à l'autre.
+In development, `ng serve` plays the role of the Ingress: `proxy.conf.json` sends `/api` to `http://localhost:3000`, removing the `/api` prefix. In the cluster, the Ingress does this rewrite. The Angular code always calls `/api/anomalies` and does not change between environments.
 
 ## Backend (10.1)
 
-L'API expose pour les anomalies : une liste filtrable et paginée (période, statut faux positif), des statistiques pour le dashboard, le détail par identifiant (400 si l'id n'est pas un UUID, 404 s'il n'existe pas) et le marquage en faux positif (`PATCH /anomalies/:id/false-positive`). La pagination utilise les paramètres `limit` et `offset` (le frontend demande `limit=10&offset=0`). Le détail des filtres se trouve dans le contrôleur et dans `apps/frontend/src/app/core/anomalies.service.ts`.
+For anomalies, the API exposes: a filterable, paginated list (period, false-positive status), statistics for the dashboard, the detail by identifier (400 if the id is not a UUID, 404 if it does not exist) and marking as false positive (`PATCH /anomalies/:id/false-positive`). Pagination uses the `limit` and `offset` parameters (the frontend requests `limit=10&offset=0`). The details of the filters are in the controller and in `apps/frontend/src/app/core/anomalies.service.ts`.
 
-`errorRate` est un ratio entre 0 et 1 (0,33 pour 40 erreurs sur 120 logs).
+`errorRate` is a ratio between 0 and 1 (0.33 for 40 errors out of 120 logs).
 
-## Frontend (10.2 à 10.6)
+## Frontend (10.2 to 10.6)
 
-- **Angular** avec composants standalone, signals et chargement paresseux des routes.
-- **Tailwind CSS** pour le style (`src/tailwind.css`, `.postcssrc.json`), icônes **Lucide**, mode sombre suivant la préférence du système.
-- **Routes** : `/dashboard`, `/anomalies`, `/anomalies/:id`. Toute autre route redirige vers `/dashboard`.
-- **Couche HTTP** : `core/anomaly.models.ts` (types) et `core/anomalies.service.ts` (`baseUrl = '/api/anomalies'`).
-- **Liste** : tableau paginé, filtres Du / Au / Faux positif, bouton « Marquer faux positif » qui met à jour la ligne sans recharger la page, lignes cliquables vers le détail.
-- **Détail** : les 9 champs de l'anomalie et le bouton de marquage. Quatre états d'erreur distincts : chargement, identifiant invalide (400), anomalie introuvable (404), API injoignable ou erreur 5xx.
-- **Affichage du taux d'erreur** : en décimal dans la liste, avec son équivalent en pourcentage dans le détail.
+- **Angular** with standalone components, signals and lazy-loaded routes.
+- **Tailwind CSS** for styling (`src/tailwind.css`, `.postcssrc.json`), **Lucide** icons, dark mode following the system preference.
+- **Routes**: `/dashboard`, `/anomalies`, `/anomalies/:id`. Any other route redirects to `/dashboard`.
+- **HTTP layer**: `core/anomaly.models.ts` (types) and `core/anomalies.service.ts` (`baseUrl = '/api/anomalies'`).
+- **List**: paginated table, From / To / False positive filters, a "Marquer faux positif" button (mark as false positive) that updates the row without reloading the page, rows clickable to the detail.
+- **Detail**: the 9 fields of the anomaly and the marking button. Four distinct error states: loading, invalid identifier (400), anomaly not found (404), API unreachable or 5xx error.
+- **Error rate display**: as a decimal in the list, with its percentage equivalent in the detail.
 
-## Conteneurisation (10.7)
+The UI texts remain in French.
 
-`apps/frontend/Dockerfile` en deux étapes :
+## Containerisation (10.7)
 
-1. `node:22-alpine` : `npm ci` puis `npm run build` (sortie dans `dist/frontend/browser`).
-2. `nginx:1.27-alpine` : copie du build et de `nginx.conf`.
+`apps/frontend/Dockerfile` in two stages:
 
-`nginx.conf` :
+1. `node:22-alpine`: `npm ci` then `npm run build` (output in `dist/frontend/browser`).
+2. `nginx:1.27-alpine`: copy of the build and of `nginx.conf`.
 
-- `/healthz` renvoie `200 ok` (utilisé par les probes Kubernetes) ;
-- fichiers `.js`, `.css` et polices : cache long (`immutable`) ;
-- toute autre route renvoie `index.html` avec `Cache-Control: no-cache` (fallback SPA, nécessaire pour recharger `/anomalies/:id`) ;
-- compression gzip.
+`nginx.conf`:
 
-`.dockerignore` exclut `node_modules`, `dist`, `.angular` et les fichiers d'environnement de développement.
+- `/healthz` returns `200 ok` (used by the Kubernetes probes);
+- `.js`, `.css` and font files: long cache (`immutable`);
+- any other route returns `index.html` with `Cache-Control: no-cache` (SPA fallback, needed to reload `/anomalies/:id`);
+- gzip compression.
 
-## Déploiement Kubernetes (10.8)
+`.dockerignore` excludes `node_modules`, `dist`, `.angular` and development environment files.
 
-Fichiers dans `infra/k8s/base/` :
+## Kubernetes deployment (10.8)
 
-- `frontend/deployment.yaml` : 1 réplica, image `ghcr.io/abdelkarim-ensi/aiops-frontend:latest`, probes sur `/healthz`, requêtes de 10m CPU et 16Mi, limite mémoire de 64Mi.
-- `frontend/service.yaml` : `frontend-service` (ClusterIP, port 80).
-- `ingress/ingress.yaml` : `/` vers `frontend-service:80`.
-- `ingress/api-ingress.yaml` : `/api(/|$)(.*)` vers `api-service:3000`, avec `rewrite-target: /$2`.
+Files in `infra/k8s/base/`:
 
-**Pourquoi deux Ingress ?** L'annotation `rewrite-target` s'applique à tout l'objet Ingress. Sur un objet unique, elle réécrirait aussi les routes du frontend. Deux objets sur le même host (`localhost`) sont fusionnés par ingress-nginx.
+- `frontend/deployment.yaml`: 1 replica, image `ghcr.io/abdelkarim-ensi/aiops-frontend:latest`, probes on `/healthz`, requests of 10m CPU and 16Mi, memory limit of 64Mi.
+- `frontend/service.yaml`: `frontend-service` (ClusterIP, port 80).
+- `ingress/ingress.yaml`: `/` to `frontend-service:80`.
+- `ingress/api-ingress.yaml`: `/api(/|$)(.*)` to `api-service:3000`, with `rewrite-target: /$2`.
 
-**Conséquence** : l'API n'est plus joignable sur `localhost/xxx` mais sur `localhost/api/xxx`. Le contrôle de santé de l'API est donc `localhost/api/health`. `localhost/health` renvoie désormais la page du frontend (fallback SPA) et ne prouve rien sur l'API.
+**Why two Ingress objects?** The `rewrite-target` annotation applies to the whole Ingress object. On a single object, it would also rewrite the frontend routes. Two objects on the same host (`localhost`) are merged by ingress-nginx.
 
-Les manifests sont appliqués à la main (`kubectl apply -f infra/k8s/base/frontend/` puis `.../ingress/`), comme ceux du backend. La CI ne fait que changer l'image du Deployment.
+**Consequence**: the API is no longer reachable at `localhost/xxx` but at `localhost/api/xxx`. The API health check is therefore `localhost/api/health`. `localhost/health` now returns the frontend page (SPA fallback) and proves nothing about the API.
 
-## Pipeline CI/CD (10.9)
+The manifests are applied by hand (`kubectl apply -f infra/k8s/base/frontend/` then `.../ingress/`), like those of the backend. CI only changes the Deployment image.
 
-`.github/workflows/frontend-ci.yml`, sur le modèle de `backend-ci.yml` :
+## CI/CD pipeline (10.9)
 
-| Job | Déclencheur | Rôle |
+`.github/workflows/frontend-ci.yml`, modelled on `backend-ci.yml`:
+
+| Job | Trigger | Role |
 |---|---|---|
-| `build-test` | push sur `main` et pull request (chemins `apps/frontend/**`) | Node 22, `npm ci`, `npm run build`, `npm test -- --no-watch` |
-| `docker-build-push` | push sur `main` uniquement | Construit l'image et la pousse sur ghcr (`:latest` et `:<sha>`) |
-| `deploy` | après le push de l'image, runner self-hosted | `kubectl set image deployment/frontend ...` puis `rollout status` |
+| `build-test` | push to `main` and pull request (paths `apps/frontend/**`) | Node 22, `npm ci`, `npm run build`, `npm test -- --no-watch` |
+| `docker-build-push` | push to `main` only | Builds the image and pushes it to ghcr (`:latest` and `:<sha>`) |
+| `deploy` | after the image push, self-hosted runner | `kubectl set image deployment/frontend ...` then `rollout status` |
 
-Il n'y a pas d'étape lint : `package.json` ne définit que `build` et `test`.
+There is no lint step: `package.json` only defines `build` and `test`.
 
-`app.spec.ts` a été corrigé : l'ancien test cherchait le `h1` « Hello, frontend » du scaffold. Les deux tests vérifient maintenant la création de l'application et la présence de la barre de navigation (AiOps, Dashboard, Anomalies). Ce sont pour l'instant les seuls tests du frontend.
+`app.spec.ts` was fixed: the old test looked for the scaffold's "Hello, frontend" `h1`. The two tests now check that the application is created and that the navigation bar is present (AiOps, Dashboard, Anomalies). For now these are the only frontend tests.
 
-## Difficultés rencontrées
+## Difficulties encountered
 
-- **Build Docker bloqué** : `npm run build` a tourné plus de 10 minutes dans le conteneur alors qu'il prend quelques secondes en local. La cause était un manque de mémoire dans la VM de Docker Desktop (3,65 Go), partagée avec le cluster kind, et occupée en plus par le Kubernetes intégré de Docker Desktop (un second cluster vide). Après avoir désactivé ce Kubernetes intégré, le build a pris 2 min 26 s.
-- **Image locale dans kind** : le cluster ne voit pas les images du Docker local. L'image a été chargée avec `kind load docker-image` sous le nom `ghcr.io/abdelkarim-ensi/aiops-frontend:latest`, et le Deployment utilise `imagePullPolicy: IfNotPresent`. Avec `:latest` sans cette règle, Kubernetes tenterait un pull depuis ghcr.
-- **Fichiers corrompus au collage** : des blocs HTML collés dans le terminal ont perdu des caractères. Les empreintes (`sha256sum`) et les nombres de lignes servaient à détecter le problème.
+- **Stuck Docker build**: `npm run build` ran for more than 10 minutes in the container while it takes a few seconds locally. The cause was a lack of memory in the Docker Desktop VM (3.65 GB), shared with the kind cluster, and additionally used by Docker Desktop's built-in Kubernetes (a second, empty cluster). After disabling that built-in Kubernetes, the build took 2 min 26 s.
+- **Local image in kind**: the cluster does not see the local Docker images. The image was loaded with `kind load docker-image` under the name `ghcr.io/abdelkarim-ensi/aiops-frontend:latest`, and the Deployment uses `imagePullPolicy: IfNotPresent`. With `:latest` and without this policy, Kubernetes would try to pull from ghcr.
+- **Files corrupted when pasting**: HTML blocks pasted into the terminal lost characters. Checksums (`sha256sum`) and line counts were used to detect the problem.
 
-## Limites connues
+## Known limitations
 
-- **Validation dans le cluster (après fusion).** Avant la fusion, l'API du cluster utilisait l'image d'avant la 10.1 (`/api/anomalies/stats` renvoyait 404). Après la fusion, `backend-ci.yml` et `frontend-ci.yml` ont déployé des images taguées avec le SHA du commit. Sur `http://localhost/`, `/api/health` et `/api/anomalies/stats` répondent, le dashboard affiche 5 anomalies, 673 logs, 126 erreurs et 1 faux positif, la liste et le détail affichent les 5 anomalies avec leurs 9 champs, et `/anomalies/00000000-0000-4000-8000-000000000000` affiche « Anomalie introuvable » (fallback SPA de nginx puis 404 de l'API).
-- **Image du Deployment** : le manifeste versionné référence `:latest`, alors que la CI place l'image taguée avec le SHA du commit. Réappliquer `deployment.yaml` à la main remet donc `:latest` jusqu'au prochain déploiement.
-- **Une seule réplique et aucun test d'intégration** : le frontend n'a pas de tests de composants, seulement les deux tests de `app.spec.ts`.
+- **Validation in the cluster (after merge).** Before the merge, the cluster API used the image from before 10.1 (`/api/anomalies/stats` returned 404). After the merge, `backend-ci.yml` and `frontend-ci.yml` deployed images tagged with the commit SHA. On `http://localhost/`, `/api/health` and `/api/anomalies/stats` respond, the dashboard shows 5 anomalies, 673 logs, 126 errors and 1 false positive, the list and the detail show the 5 anomalies with their 9 fields, and `/anomalies/00000000-0000-4000-8000-000000000000` shows "Anomalie introuvable" (nginx SPA fallback then 404 from the API).
+- **Deployment image**: the versioned manifest references `:latest`, whereas CI puts the image tagged with the commit SHA. Re-applying `deployment.yaml` by hand therefore puts `:latest` back until the next deployment.
+- **A single replica and no integration tests**: the frontend has no component tests, only the two tests of `app.spec.ts`.
 
-## Vérification après fusion
+## Post-merge verification
 
 ```bash
 kubectl -n aiops get pods
@@ -118,4 +120,4 @@ curl -s localhost/api/anomalies/stats
 curl -s -o /dev/null -w "%{http_code}\n" localhost/anomalies/abc
 ```
 
-Attendu : pods `Running`, `{"status":"ok",...}`, du JSON de statistiques, puis `200`. Ouvrir ensuite `http://localhost/` : le dashboard, la liste et le détail doivent afficher les données de l'API, y compris après un rechargement (F5) sur `/anomalies/<id>`.
+Expected: pods `Running`, `{"status":"ok",...}`, statistics JSON, then `200`. Then open `http://localhost/`: the dashboard, the list and the detail must show the API data, including after a reload (F5) on `/anomalies/<id>`.

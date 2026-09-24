@@ -1,79 +1,79 @@
-# Phase 8 — ML Service : boucle de polling continue et intégration Loki
+# Phase 8 — ML service: continuous polling loop and Loki integration
 
-## 1. Objectif
+## 1. Goal
 
-Faire tourner en continu, dans le cluster, un service de détection d'anomalies (`ml-service`) qui interroge Loki sur une fenêtre glissante, calcule des features, applique un modèle Isolation Forest, et remonte les anomalies détectées au backend via `POST /anomalies`.
+Run continuously, inside the cluster, an anomaly detection service (`ml-service`) that queries Loki over a sliding window, computes features, applies an Isolation Forest model, and reports detected anomalies to the backend through `POST /anomalies`.
 
 ## 2. Architecture
 
-- `ml-service` (FastAPI + asyncio) tourne comme Deployment dans le namespace `aiops`.
-- Boucle de polling fusionnée avec le cycle de vie FastAPI (`lifespan`), intervalle 10s.
-- Fenêtre glissante de 5 minutes, avec une marge de lookback de 5 minutes (`LOOKBACK=600s`) pour couvrir les logs arrivant en retard.
-- `_is_window_closed()` détermine si une fenêtre est prête à être traitée.
-- Dédup en mémoire (`_sent_windows`) remplacée en fin de phase par une contrainte persistante côté base (voir section 5).
-- Le service interroge Loki (`loki.observability.svc.cluster.local:3100`) et poste les anomalies détectées vers le backend (`api-service.aiops.svc.cluster.local:3000`).
+- `ml-service` (FastAPI + asyncio) runs as a Deployment in the `aiops` namespace.
+- Polling loop merged with the FastAPI lifecycle (`lifespan`), 10 s interval.
+- 5-minute sliding window, with a 5-minute lookback margin (`LOOKBACK=600s`) to cover late-arriving logs.
+- `_is_window_closed()` decides whether a window is ready to be processed.
+- In-memory dedup (`_sent_windows`), replaced at the end of the phase by a persistent constraint in the database (see section 5).
+- The service queries Loki (`loki.observability.svc.cluster.local:3100`) and posts detected anomalies to the backend (`api-service.aiops.svc.cluster.local:3000`).
 
-## 3. Composants déployés
+## 3. Deployed components
 
-| Composant | Fichier(s) | Rôle |
+| Component | File(s) | Role |
 |---|---|---|
-| ml-service Deployment | `infra/k8s/base/ml-service/deployment.yaml` | Pod exécutant la boucle de polling |
-| ml-service Service | `infra/k8s/base/ml-service/service.yaml` | Exposition interne du service |
+| ml-service Deployment | `infra/k8s/base/ml-service/deployment.yaml` | Pod running the polling loop |
+| ml-service Service | `infra/k8s/base/ml-service/service.yaml` | Internal exposure of the service |
 | ml-service ConfigMap | `infra/k8s/base/ml-service/configmap.yaml` | `LOKI_URL`, `LOKI_QUERY`, `LOKI_TENANT_ID`, `BACKEND_URL` |
-| `main.py` | `apps/ml-service/app/main.py` | Boucle de polling + lifespan FastAPI |
-| `loki_client.py` | `apps/ml-service/app/loki_client.py` | Requêtes vers Loki, filtrage des probes kube-probe |
-| `backend_client.py` | `apps/ml-service/app/backend_client.py` | POST vers le backend, fix timezone UTC |
+| `main.py` | `apps/ml-service/app/main.py` | Polling loop + FastAPI lifespan |
+| `loki_client.py` | `apps/ml-service/app/loki_client.py` | Loki queries, filtering of kube-probe requests |
+| `backend_client.py` | `apps/ml-service/app/backend_client.py` | POST to the backend, UTC timezone fix |
 
-## 4. Bugs corrigés durant la phase
+## 4. Bugs fixed during the phase
 
-- **Décalage horaire** : `backend_client.py` n'imposait pas explicitement UTC avant `.isoformat()`, causant une interprétation erronée du timestamp côté Node/Prisma (heure locale du serveur au lieu d'UTC). Fix : `.tz_localize("UTC")` / `.tz_convert("UTC")` systématique avant sérialisation.
-- **Imports manquants** dans `loki_client.py` (`httpx`, `json`, `time`, `datetime`) réajoutés.
-- **`Bus error (core dumped)`** du pod backend en cluster : mismatch OpenSSL entre les stages Docker build/production sur Alpine. Fix : ajout de `binaryTargets = ["native", "linux-musl-openssl-3.0.x"]` dans `apps/backend/prisma/schema.prisma`.
+- **Time offset**: `backend_client.py` did not explicitly enforce UTC before `.isoformat()`, causing the timestamp to be misinterpreted on the Node/Prisma side (server local time instead of UTC). Fix: systematic `.tz_localize("UTC")` / `.tz_convert("UTC")` before serialisation.
+- **Missing imports** in `loki_client.py` (`httpx`, `json`, `time`, `datetime`) added back.
+- **`Bus error (core dumped)`** of the backend pod in the cluster: OpenSSL mismatch between the Docker build/production stages on Alpine. Fix: added `binaryTargets = ["native", "linux-musl-openssl-3.0.x"]` in `apps/backend/prisma/schema.prisma`.
 
-## 5. Dédup persistante des anomalies
+## 5. Persistent anomaly dedup
 
-**Problème initial** : `_sent_windows` était un dictionnaire en mémoire — à chaque redémarrage du pod (crash, déploiement, autoscaling), les fenêtres encore dans la marge de lookback étaient renvoyées en doublon.
+**Initial problem**: `_sent_windows` was an in-memory dictionary. On every pod restart (crash, deployment, autoscaling), windows still within the lookback margin were sent again as duplicates.
 
-**Solution retenue** : contrainte unique en base plutôt que dédup applicative.
+**Chosen solution**: a unique constraint in the database rather than application-level dedup.
 
-- `apps/backend/prisma/schema.prisma` : ajout de `@unique` sur le champ `windowStart` du modèle `Anomaly`.
-- Migration Prisma `add_unique_window_start` générée et appliquée (après nettoyage des doublons existants via une requête `DELETE ... USING` gardant la ligne au `createdAt` le plus ancien par `windowStart`).
-- `apps/backend/src/anomalies/anomalies.service.ts` : la méthode `create()` utilise désormais `prisma.anomaly.upsert()` avec `where: { windowStart }` au lieu de `create()`, rendant l'opération idempotente peu importe le nombre de tentatives.
+- `apps/backend/prisma/schema.prisma`: added `@unique` on the `windowStart` field of the `Anomaly` model.
+- Prisma migration `add_unique_window_start` generated and applied (after cleaning existing duplicates with a `DELETE ... USING` query keeping the row with the oldest `createdAt` per `windowStart`).
+- `apps/backend/src/anomalies/anomalies.service.ts`: the `create()` method now uses `prisma.anomaly.upsert()` with `where: { windowStart }` instead of `create()`, making the operation idempotent regardless of the number of attempts.
 
-Résultat : la persistance de la dédup ne dépend plus de l'état mémoire du pod ; elle survit aux redémarrages, aux déploiements et à l'autoscaling.
+Result: dedup no longer depends on the pod's in-memory state; it survives restarts, deployments and autoscaling.
 
-## 6. Intégration CI/CD
+## 6. CI/CD integration
 
-Le pipeline `.github/workflows/backend-ci.yml` ne lançait auparavant que `prisma generate` (client uniquement), jamais `prisma migrate deploy`. Ajout d'une étape dans le job `deploy`, avant le rollout :
+The `.github/workflows/backend-ci.yml` pipeline used to run only `prisma generate` (client only), never `prisma migrate deploy`. A step was added in the `deploy` job, before the rollout:
 
-- Lancement d'un pod éphémère (`kubectl run prisma-migrate-<sha> --rm -i --restart=Never`) avec l'image backend fraîchement buildée, exécutant `npx prisma migrate deploy` contre la base du cluster.
-- Variable `DATABASE_URL` injectée depuis le secret GitHub Actions `DATABASE_URL` (créé pour cette phase, valeur alignée sur `postgres-secret` du cluster : `postgresql://postgres:postgres@postgres-service:5432/taskmanager?schema=public`).
-- Le `kubectl set image` + `kubectl rollout status` existant est conservé tel quel après cette étape.
+- Launch of an ephemeral pod (`kubectl run prisma-migrate-<sha> --rm -i --restart=Never`) with the freshly built backend image, running `npx prisma migrate deploy` against the cluster database.
+- `DATABASE_URL` variable injected from the GitHub Actions secret `DATABASE_URL` (created for this phase, value aligned with the cluster's `postgres-secret`: `postgresql://postgres:postgres@postgres-service:5432/taskmanager?schema=public`).
+- The existing `kubectl set image` + `kubectl rollout status` are kept as they are after this step.
 
-Le tag d'image (`:${{ github.sha }}`) était déjà géré dynamiquement par le pipeline via `kubectl set image` — pas de bug réel sur ce point, contrairement à l'hypothèse initiale d'un tag figé en dur dans `deployment.yaml`.
+The image tag (`:${{ github.sha }}`) was already handled dynamically by the pipeline through `kubectl set image`, so there was no real bug on this point, contrary to the initial hypothesis of a tag hard-coded in `deployment.yaml`.
 
-## 7. Incident : clock-jump / suspend-resume
+## 7. Incident: clock jump / suspend-resume
 
-Durant les tests, une panne DNS transitoire (`Temporary failure in name resolution`, `All connection attempts failed`) a été observée dans les logs du pod `ml-service`. Diagnostic :
+During testing, a transient DNS failure (`Temporary failure in name resolution`, `All connection attempts failed`) was observed in the `ml-service` pod logs. Diagnosis:
 
-- Un seul cluster `kind` actif (`aiops-cluster-tf`) — la cause dual-cluster documentée en Phase 5-7 était exclue.
-- CoreDNS et l'ensemble des pods du control-plane (`etcd`, `kube-apiserver`, `kube-scheduler`, `kube-proxy`, `kindnet`) ont redémarré au même moment.
-- `docker inspect` a révélé que le conteneur du control-plane affichait un `StartedAt` antérieur à `uptime -s` (l'heure de démarrage de la machine) — signature typique d'un ajustement d'horloge après une mise en veille/reprise du laptop.
-- Auto-résolu après quelques dizaines de minutes ; confirmé par résolution DNS réussie depuis l'intérieur du pod (`python3 -c "socket.gethostbyname(...)"`).
+- Only one `kind` cluster active (`aiops-cluster-tf`), so the dual-cluster cause documented in phases 5-7 was ruled out.
+- CoreDNS and all control-plane pods (`etcd`, `kube-apiserver`, `kube-scheduler`, `kube-proxy`, `kindnet`) restarted at the same moment.
+- `docker inspect` showed that the control-plane container had a `StartedAt` earlier than `uptime -s` (the machine boot time), a typical signature of a clock adjustment after the laptop was suspended and resumed.
+- Self-resolved after a few dozen minutes; confirmed by successful DNS resolution from inside the pod (`python3 -c "socket.gethostbyname(...)"`).
 
-Pas de correctif de code nécessaire — comportement environnemental, pas applicatif.
+No code fix needed: environmental behaviour, not application behaviour.
 
-## 8. Validation end-to-end
+## 8. End-to-end validation
 
-Test automatique réalisé sans intervention manuelle :
-1. Déclenchement de `GET /tasks/simulate-failure` via l'Ingress (`http://localhost/tasks/simulate-failure`).
-2. Attente de la fermeture de la fenêtre glissante (~10 min).
-3. Vérification via `GET /anomalies` (`curl localhost:3003/anomalies`) : nouvelle entrée avec `windowStart` correspondant, `simulateFailureCount > 0`, une seule occurrence (pas de doublon).
+Automatic test carried out without manual intervention:
+1. Trigger `GET /tasks/simulate-failure` through the Ingress (`http://localhost/tasks/simulate-failure`).
+2. Wait for the sliding window to close (~10 min).
+3. Check through `GET /anomalies` (`curl localhost:3003/anomalies`): new entry with the matching `windowStart`, `simulateFailureCount > 0`, a single occurrence (no duplicate).
 
-## 9. État de clôture
+## 9. Closing state
 
-- PR #7 (`phase-8-ml-loki-integration` → `main`) mergée.
-- Pipeline complet (`lint-build-test` → `docker-build-push` → `deploy`) exécuté avec succès sur `main`, incluant la nouvelle étape de migration Prisma.
-- Contrainte `Anomaly_windowStart_key` confirmée en base cluster via `\d "Anomaly"`.
+- PR #7 (`phase-8-ml-loki-integration` → `main`) merged.
+- Full pipeline (`lint-build-test` → `docker-build-push` → `deploy`) run successfully on `main`, including the new Prisma migration step.
+- `Anomaly_windowStart_key` constraint confirmed in the cluster database through `\d "Anomaly"`.
 
-Phase 8 clôturée.
+Phase 8 closed.

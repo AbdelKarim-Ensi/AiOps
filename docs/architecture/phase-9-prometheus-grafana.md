@@ -1,78 +1,78 @@
-# Phase 9 — Monitoring des métriques : Prometheus + Grafana
+# Phase 9 — Metrics monitoring: Prometheus + Grafana
 
-## 1. Objectif
+## 1. Goal
 
-Ajouter une couche de métriques applicatives à AiOps : instrumenter le backend (`api`) et le `ml-service`, les scraper avec Prometheus, et les visualiser dans le Grafana existant (Phase 6), à côté des logs Loki.
+Add an application metrics layer to AiOps: instrument the backend (`api`) and the `ml-service`, scrape them with Prometheus, and visualise them in the existing Grafana (phase 6), next to the Loki logs.
 
-Definition of Done : au moins une requête PromQL complexe visible dans un dashboard (ici : `histogram_quantile` avec `sum by (le)` + `rate`, et un ratio d'erreur agrégé).
+Definition of Done: at least one complex PromQL query visible in a dashboard (here: `histogram_quantile` with `sum by (le)` + `rate`, and an aggregated error ratio).
 
 ## 2. Architecture
 
-- Chaque service expose `GET /metrics` au format Prometheus.
-- Prometheus (Helm, namespace `observability`) scrape `api-service:3000` et `ml-service:8001` via des jobs statiques.
-- Choix **Option A : Prometheus seul** (chart `prometheus-community/prometheus`), pas `kube-prometheus-stack`, pour ne pas dupliquer le Grafana de la Phase 6.
-- Grafana reçoit Prometheus comme seconde datasource (à côté de Loki) et charge les dashboards depuis des ConfigMaps via le sidecar.
+- Each service exposes `GET /metrics` in Prometheus format.
+- Prometheus (Helm, namespace `observability`) scrapes `api-service:3000` and `ml-service:8001` through static jobs.
+- **Option A chosen: Prometheus alone** (chart `prometheus-community/prometheus`), not `kube-prometheus-stack`, to avoid duplicating the Grafana from phase 6.
+- Grafana receives Prometheus as a second datasource (next to Loki) and loads dashboards from ConfigMaps through the sidecar.
 
 ```
 api-service (NestJS)  ──/metrics──┐
-                                  ├──> Prometheus ──> Grafana (datasources : Loki + Prometheus)
+                                  ├──> Prometheus ──> Grafana (datasources: Loki + Prometheus)
 ml-service (FastAPI)  ──/metrics──┘
 ```
 
-## 3. Composants déployés
+## 3. Deployed components
 
-| Composant | Fichier(s) | Rôle |
+| Component | File(s) | Role |
 |---|---|---|
-| MetricsModule (NestJS) | `apps/backend/src/metrics/` | Expose `GET /metrics`, déclare compteur + histogramme HTTP |
-| MetricsInterceptor | `apps/backend/src/metrics/` + `main.ts` | Interceptor global, enregistré via `app.useGlobalInterceptors(app.get(...))` |
-| Instrumentation FastAPI | `apps/ml-service/app/main.py` | `Instrumentator().instrument(app).expose(app, endpoint="/metrics")` + métriques custom du polling |
-| Prometheus (Helm) | `infra/k8s/observability/prometheus/values-prometheus.yaml` | Serveur Prometheus + jobs de scrape |
-| Pipeline ml-service | `.github/workflows/ml-service-ci.yml` | lint-build → docker-build-push → deploy |
-| Datasource Prometheus | `infra/k8s/observability/grafana/values-grafana.yaml` | Provisioning de la datasource, sidecar dashboards activé |
-| Dashboard | `infra/k8s/observability/grafana/dashboards/aiops-metrics.json` | Dashboard `AiOps - Métriques (Phase 9)` |
+| MetricsModule (NestJS) | `apps/backend/src/metrics/` | Exposes `GET /metrics`, declares HTTP counter + histogram |
+| MetricsInterceptor | `apps/backend/src/metrics/` + `main.ts` | Global interceptor, registered via `app.useGlobalInterceptors(app.get(...))` |
+| FastAPI instrumentation | `apps/ml-service/app/main.py` | `Instrumentator().instrument(app).expose(app, endpoint="/metrics")` + custom polling metrics |
+| Prometheus (Helm) | `infra/k8s/observability/prometheus/values-prometheus.yaml` | Prometheus server + scrape jobs |
+| ml-service pipeline | `.github/workflows/ml-service-ci.yml` | lint-build → docker-build-push → deploy |
+| Prometheus datasource | `infra/k8s/observability/grafana/values-grafana.yaml` | Datasource provisioning, dashboards sidecar enabled |
+| Dashboard | `infra/k8s/observability/grafana/dashboards/aiops-metrics.json` | Dashboard `AiOps - Métriques (Phase 9)` (name kept as in the JSON file) |
 
-### Métriques exposées
+### Exposed metrics
 
 **Backend (NestJS, `@willsoto/nestjs-prometheus` + `prom-client`)**
 - `http_requests_total{method, route, status_code}` (Counter)
-- `http_request_duration_seconds{method, route, status_code}` (Histogram, buckets de 0.01s à 5s)
+- `http_request_duration_seconds{method, route, status_code}` (Histogram, buckets from 0.01 s to 5 s)
 
 **ml-service (FastAPI, `prometheus-fastapi-instrumentator==8.1.0`, `prometheus-client==0.26.0`)**
-- Métriques HTTP automatiques via l'instrumentator
+- Automatic HTTP metrics through the instrumentator
 - `ml_polling_cycles_total{status="success"|"error"}` (Counter)
 - `ml_polling_cycle_duration_seconds` (Histogram)
 - `ml_anomalies_detected_last_window` (Gauge)
 - `ml_anomalies_sent_total` (Counter)
-- Le `try/except/finally` du cycle garantit l'enregistrement quel que soit le résultat.
+- The `try/except/finally` of the cycle guarantees recording whatever the outcome.
 
-### Jobs de scrape
+### Scrape jobs
 
-| Job | Cible |
+| Job | Target |
 |---|---|
 | `api-service` | `api-service.aiops.svc.cluster.local:3000/metrics` |
 | `ml-service` | `ml-service.aiops.svc.cluster.local:8001/metrics` |
 
-### Dashboard Grafana
+### Grafana dashboard
 
-Le dashboard utilise une **variable `datasource`** (type datasource, query `prometheus`) au lieu d'un UID en dur : l'UID de la datasource est généré par Grafana et ne doit pas être supposé.
+The dashboard uses a **`datasource` variable** (datasource type, query `prometheus`) instead of a hard-coded UID: the datasource UID is generated by Grafana and must not be assumed.
 
-| Panel | Requête (résumé) |
+| Panel | Query (summary) |
 |---|---|
 | api-service / ml-service UP | `up{job="..."}` |
-| Anomalies (dernière fenêtre) | `ml_anomalies_detected_last_window` |
-| Anomalies envoyées (1h) | `increase(ml_anomalies_sent_total[1h])` |
-| API - Latence P95 / P99 | `histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="api-service"}[5m])))` |
-| API - Taux d'erreur 5xx | ratio `rate(status_code=~"5..") / rate(total)`, numérateur en `or vector(0)` |
-| API - Requêtes par route | `sum by (route) (rate(http_requests_total{job="api-service"}[5m]))` |
-| ML - Durée cycle de polling (P95) | `histogram_quantile` sur `ml_polling_cycle_duration_seconds_bucket` |
-| ML - Cycles de polling | `sum by (status) (rate(ml_polling_cycles_total[5m]))` |
-| ML - Anomalies envoyées par heure | `increase(ml_anomalies_sent_total[1h])` |
+| Anomalies (last window) | `ml_anomalies_detected_last_window` |
+| Anomalies sent (1h) | `increase(ml_anomalies_sent_total[1h])` |
+| API - Latency P95 / P99 | `histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="api-service"}[5m])))` |
+| API - 5xx error rate | ratio `rate(status_code=~"5..") / rate(total)`, numerator in `or vector(0)` |
+| API - Requests per route | `sum by (route) (rate(http_requests_total{job="api-service"}[5m]))` |
+| ML - Polling cycle duration (P95) | `histogram_quantile` on `ml_polling_cycle_duration_seconds_bucket` |
+| ML - Polling cycles | `sum by (status) (rate(ml_polling_cycles_total[5m]))` |
+| ML - Anomalies sent per hour | `increase(ml_anomalies_sent_total[1h])` |
 
-Toutes les requêtes filtrent par `job=` (voir leçon 4).
+All queries filter by `job=` (see lesson 4).
 
-### Chargement des dashboards
+### Loading the dashboards
 
-Le sidecar Grafana est activé dans `values-grafana.yaml` (`sidecar.dashboards.enabled`, label `grafana_dashboard: "1"`). Le dashboard est fourni via une ConfigMap `aiops-metrics-dashboard` (namespace `observability`) créée depuis le JSON du repo :
+The Grafana sidecar is enabled in `values-grafana.yaml` (`sidecar.dashboards.enabled`, label `grafana_dashboard: "1"`). The dashboard is provided through a ConfigMap `aiops-metrics-dashboard` (namespace `observability`) created from the JSON in the repo:
 
 ```bash
 kubectl create configmap aiops-metrics-dashboard -n observability \
@@ -81,65 +81,65 @@ kubectl create configmap aiops-metrics-dashboard -n observability \
 kubectl label configmap aiops-metrics-dashboard -n observability grafana_dashboard=1 --overwrite
 ```
 
-Le sidecar recharge tout seul après un `apply` (pas de `helm upgrade` nécessaire pour un simple changement du JSON).
+The sidecar reloads by itself after an `apply` (no `helm upgrade` needed for a simple JSON change).
 
-## 4. Bugs corrigés durant la phase
+## 4. Bugs fixed during the phase
 
-- **`status_code` toujours à 200 côté NestJS** : la lecture de `response.statusCode` dans le callback RxJS (`tap`) avait lieu avant que le filtre d'exception Nest n'écrive le vrai code, donc les erreurs 500 étaient comptées comme 200. Fix : lecture dans l'event natif `response.once('finish', ...)`. Testé en local avec 200 et 500.
-- **`extraScrapeConfigs` sans effet** : la clé doit être à la **racine** du values Prometheus, pas sous `server:`. Vérifié via `helm show values prometheus-community/prometheus`. Après `helm upgrade`, redémarrage du pod `prometheus-server` pour recharger la config.
+- **`status_code` always 200 on the NestJS side**: reading `response.statusCode` in the RxJS callback (`tap`) happened before Nest's exception filter wrote the real code, so 500 errors were counted as 200. Fix: read it in the native `response.once('finish', ...)` event. Tested locally with 200 and 500.
+- **`extraScrapeConfigs` had no effect**: the key must be at the **root** of the Prometheus values, not under `server:`. Verified with `helm show values prometheus-community/prometheus`. After `helm upgrade`, the `prometheus-server` pod was restarted to reload the config.
 
-## 5. Dette technique découverte : ml-service sans CI/CD
+## 5. Technical debt discovered: ml-service without CI/CD
 
-Le `ml-service` n'avait aucun pipeline (contrairement au backend) : chaque déploiement était manuel, et l'image en cluster était `aiops-ml-service:dev` (tag statique, buildée en local). L'instrumentation Prometheus n'était donc jamais arrivée dans le cluster (`/metrics` en 404).
+The `ml-service` had no pipeline (unlike the backend): every deployment was manual, and the image in the cluster was `aiops-ml-service:dev` (static tag, built locally). The Prometheus instrumentation had therefore never reached the cluster (`/metrics` returned 404).
 
-Création de `.github/workflows/ml-service-ci.yml`, sur le modèle de `backend-ci.yml` :
+Creation of `.github/workflows/ml-service-ci.yml`, modelled on `backend-ci.yml`:
 
-1. `lint-build` : compile check Python (pas de vrais tests unitaires : `test_loki.py` est un script exploratoire, pas du pytest).
-2. `docker-build-push` : image `ghcr.io/abdelkarim-ensi/aiops-ml-service:<sha>`.
-3. `deploy` : `kubectl set image deployment/ml-service ml-service=... -n aiops`, exécuté sur le runner self-hosted.
+1. `lint-build`: Python compile check (no real unit tests: `test_loki.py` is an exploratory script, not pytest).
+2. `docker-build-push`: image `ghcr.io/abdelkarim-ensi/aiops-ml-service:<sha>`.
+3. `deploy`: `kubectl set image deployment/ml-service ml-service=... -n aiops`, run on the self-hosted runner.
 
-Sur une PR, seul `lint-build` s'exécute ; build, push et deploy ne se déclenchent que sur `main`.
+On a PR only `lint-build` runs; build, push and deploy trigger only on `main`.
 
-## 6. Incident : CrashLoopBackOff après le premier déploiement CI
+## 6. Incident: CrashLoopBackOff after the first CI deployment
 
-Au premier merge sur `main`, le job `deploy` est resté bloqué sur `Waiting for deployment "ml-service" rollout to finish: 1 old replicas are pending termination`.
+On the first merge to `main`, the `deploy` job stayed stuck on `Waiting for deployment "ml-service" rollout to finish: 1 old replicas are pending termination`.
 
-Diagnostic :
+Diagnosis:
 
-- `kubectl get pods` : le **nouveau** pod était en `CrashLoopBackOff`, l'ancien (`:dev`) tournait toujours et servait le trafic (il joue le rôle de filet de sécurité pendant un rolling update).
-- `kubectl logs <pod> --previous` : `RuntimeError: Modèle introuvable : model/isolation_forest.joblib` levée dans le `lifespan`.
-- Cause : `apps/ml-service/.gitignore` contenait `model/*.joblib`. Le modèle (913 Ko) existait en local (donc dans l'ancienne image buildée à la main) mais n'était jamais dans le checkout du CI, donc absent de l'image.
+- `kubectl get pods`: the **new** pod was in `CrashLoopBackOff`, the old one (`:dev`) was still running and serving traffic (it acts as a safety net during a rolling update).
+- `kubectl logs <pod> --previous`: `RuntimeError: Modèle introuvable : model/isolation_forest.joblib` raised in the `lifespan`.
+- Cause: `apps/ml-service/.gitignore` contained `model/*.joblib`. The model (913 KB) existed locally (hence in the old, hand-built image) but was never in the CI checkout, so it was missing from the image.
 
-Fix :
+Fix:
 
-- Exception dans `apps/ml-service/.gitignore` (`!model/isolation_forest.joblib`, placée **après** la règle générale) et commit du modèle.
-- `kubectl rollout undo deployment/ml-service -n aiops` pour stopper le CrashLoop en attendant.
-- Vérification préalable que `scikit-learn==1.9.1` et `joblib==1.6.0` étaient épinglés dans `requirements.txt` à la même version que celle qui avait entraîné le modèle.
+- Exception in `apps/ml-service/.gitignore` (`!model/isolation_forest.joblib`, placed **after** the general rule) and commit of the model.
+- `kubectl rollout undo deployment/ml-service -n aiops` to stop the CrashLoop in the meantime.
+- Prior check that `scikit-learn==1.9.1` and `joblib==1.6.0` were pinned in `requirements.txt` at the same version that trained the model.
 
-Résultat : rollout réussi, `Application startup complete`, `GET /metrics 200 OK` dans les logs, target `ml-service` UP dans Prometheus (`job="ml-service"`).
+Result: successful rollout, `Application startup complete`, `GET /metrics 200 OK` in the logs, `ml-service` target UP in Prometheus (`job="ml-service"`).
 
 ## 7. Validation
 
-- Prometheus `/targets` : `api-service` et `ml-service` en `UP`.
-- `up{job=~"api-service|ml-service"}` renvoie 1 pour les deux ; `increase(ml_polling_cycles_total{status="success"}[5m])` augmente (~19 juste après le redéploiement, la fenêtre de 5 min n'étant pas encore pleine).
-- Datasource Prometheus : "Successfully queried the Prometheus API" dans Grafana.
-- Dashboard chargé par le sidecar : panels UP, latence P95/P99, requêtes par route, durée des cycles ML alimentés en données.
-- Panel « API - Taux d'erreur 5xx » : affiche 0 % (au lieu de « No data ») grâce au `or vector(0)`.
-- PR de la datasource et du dashboard : #11.
+- Prometheus `/targets`: `api-service` and `ml-service` `UP`.
+- `up{job=~"api-service|ml-service"}` returns 1 for both; `increase(ml_polling_cycles_total{status="success"}[5m])` grows (~19 right after the redeployment, the 5-minute window not being full yet).
+- Prometheus datasource: "Successfully queried the Prometheus API" in Grafana.
+- Dashboard loaded by the sidecar: UP panels, P95/P99 latency, requests per route, ML cycle duration all fed with data.
+- Panel "API - 5xx error rate": shows 0 % (instead of "No data") thanks to `or vector(0)`.
+- PR for the datasource and the dashboard: #11.
 
-## 8. Leçons apprises
+## 8. Lessons learned
 
-1. **`extraScrapeConfigs` va à la racine du values Prometheus**, pas sous `server:`. Toujours vérifier la structure avec `helm show values <chart>`.
-2. **Vérifier qu'un service a un pipeline CI/CD avant de dépendre de son image à jour.** Une image `:dev` construite à la main peut contenir des fichiers (ici le modèle) absents du repo.
-3. **Un `.gitignore` peut exclure un artefact nécessaire au build** (`.joblib`). Le symptôme n'apparaît qu'au premier build en CI. Tester avec `git ls-files` et `git check-ignore -v`.
-4. **Collision de noms de métriques entre services** : `prometheus-fastapi-instrumentator` expose des métriques nommées comme celles du backend NestJS (`http_requests_total`, `http_request_duration_seconds`) mais avec d'autres labels (`handler`, `status` groupé en `5xx`, contre `route` et `status_code`). Toujours filtrer par `job=` dans les requêtes et les dashboards.
-5. **Un rolling update qui bloque ne veut pas dire que l'ancien pod est en cause** : regarder d'abord si le *nouveau* pod est en CrashLoop (`kubectl get pods`, `logs --previous`). Ne pas supprimer l'ancien pod, c'est lui qui sert le trafic. `kubectl rollout undo` est le moyen propre d'annuler.
-6. **Ajouter un `--timeout` à `kubectl rollout status`** dans les pipelines pour ne pas bloquer indéfiniment le runner self-hosted.
-7. **Un ratio avec un numérateur vide affiche "No data", pas 0.** Utiliser `(sum(rate(...)) or vector(0)) / sum(rate(...))` pour un panel de taux d'erreur.
-8. **Buckets d'histogramme** : avec un plus petit bucket à 10 ms, les quantiles P95/P99 restent collés à cette borne quand tout est plus rapide. Adapter les buckets si on veut de la résolution sous 10 ms.
-9. **Datasource dans un dashboard provisionné** : utiliser une variable de type `datasource` plutôt qu'un UID en dur.
-10. **Collage de grosses lignes dans un terminal** : une ligne saisie est tronquée vers 4096 caractères, ce qui corrompt silencieusement un JSON écrit en une seule ligne. Écrire un panel par ligne, ou générer le fichier avec un script, puis valider avec `python3 -m json.tool` **et** vérifier le contenu (nombre de panels), car un JSON valide peut être incomplet.
+1. **`extraScrapeConfigs` goes at the root of the Prometheus values**, not under `server:`. Always check the structure with `helm show values <chart>`.
+2. **Check that a service has a CI/CD pipeline before depending on its image being up to date.** A hand-built `:dev` image may contain files (here the model) that are absent from the repo.
+3. **A `.gitignore` can exclude an artefact needed for the build** (`.joblib`). The symptom only appears on the first CI build. Test with `git ls-files` and `git check-ignore -v`.
+4. **Metric name collision between services**: `prometheus-fastapi-instrumentator` exposes metrics named like those of the NestJS backend (`http_requests_total`, `http_request_duration_seconds`) but with different labels (`handler`, `status` grouped as `5xx`, versus `route` and `status_code`). Always filter by `job=` in queries and dashboards.
+5. **A stuck rolling update does not mean the old pod is at fault**: first check whether the *new* pod is in CrashLoop (`kubectl get pods`, `logs --previous`). Do not delete the old pod, it is the one serving traffic. `kubectl rollout undo` is the clean way to cancel.
+6. **Add a `--timeout` to `kubectl rollout status`** in pipelines so the self-hosted runner is not blocked indefinitely.
+7. **A ratio with an empty numerator shows "No data", not 0.** Use `(sum(rate(...)) or vector(0)) / sum(rate(...))` for an error-rate panel.
+8. **Histogram buckets**: with a smallest bucket at 10 ms, the P95/P99 quantiles stick to that bound when everything is faster. Adapt the buckets if you want resolution below 10 ms.
+9. **Datasource in a provisioned dashboard**: use a `datasource` variable rather than a hard-coded UID.
+10. **Pasting very long lines into a terminal**: a typed line is truncated around 4096 characters, which silently corrupts a JSON written on a single line. Write one panel per line, or generate the file with a script, then validate with `python3 -m json.tool` **and** check the content (number of panels), because a valid JSON can still be incomplete.
 
-## 9. Suite
+## 9. Next
 
-Phase 10 : frontend dashboard. Phase 11 : alerting (Alertmanager), qui s'appuiera sur les métriques Prometheus de cette phase.
+Phase 10: frontend dashboard. Phase 11: alerting (Alertmanager), which will build on the Prometheus metrics of this phase.

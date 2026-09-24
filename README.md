@@ -233,7 +233,7 @@ The runner must be started and stay active, otherwise `deploy` jobs stay queued:
 cd ~/Projects/actions-runner && ./run.sh
 ```
 
-## Detailed documentation (in French)
+## Detailed documentation Detailed documentation
 
 - [Phase 1: NestJS + Prisma backend](docs/architecture/phase-1-backend-nestjs-prisma.md)
 - [Phase 2: containerisation](docs/architecture/phase-2-dockerisation.md)
