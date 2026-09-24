@@ -1,21 +1,21 @@
-# Phase 2 — Dockerisation du backend
+# Phase 2 — Backend containerisation
 
-**Statut :** ✅ Terminée
-**Période :** 1er septembre 2026 (commit `2ab2fb2`)
+**Status:** ✅ Done
+**Period:** 1 September 2026 (commit `2ab2fb2`)
 
-## 1. Objectif
+## 1. Goal
 
-Produire une image Docker reproductible et légère du backend, et pouvoir lancer PostgreSQL en local sans l'installer.
+Produce a reproducible, lightweight Docker image of the backend, and be able to run PostgreSQL locally without installing it.
 
-**Definition of Done (PRD) :**
-> `docker compose up` démarre l'API et la BDD, endpoints accessibles de l'extérieur.
+**Definition of Done (PRD):**
+> `docker compose up` starts the API and the database, endpoints reachable from outside.
 
-## 2. Livrables
+## 2. Deliverables
 
-- **Dockerfile multi-stage** pour le backend : une étape de build, une étape d'exécution réduite à ce qui est nécessaire pour démarrer l'API.
-- **`docker-compose`** lançant PostgreSQL pour le développement local.
+- **Multi-stage Dockerfile** for the backend: a build stage, and a runtime stage reduced to what is needed to start the API.
+- **`docker-compose`** running PostgreSQL for local development.
 
-## 3. Points d'attention
+## 3. Points of attention
 
-- L'image finale tourne sur Alpine : les `binaryTargets` Prisma ont dû être corrigés en phase 8 pour que le client Prisma fonctionne dans ce conteneur.
-- Cette image est celle que la CI construit et pousse (phase 3) puis que Kubernetes déploie (phase 5).
+- The final image runs on Alpine: the Prisma `binaryTargets` had to be fixed in phase 8 for the Prisma client to work in this container.
+- This is the image that CI builds and pushes (phase 3) and that Kubernetes deploys (phase 5).

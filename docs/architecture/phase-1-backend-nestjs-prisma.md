@@ -1,31 +1,31 @@
-# Phase 1 — Backend NestJS + Prisma + PostgreSQL
+# Phase 1 — NestJS + Prisma + PostgreSQL backend
 
-**Statut :** ✅ Terminée
-**Période :** 31 août 2026 (commit `32ecdc8`)
+**Status:** ✅ Done
+**Period:** 31 August 2026 (commit `32ecdc8`)
 
-## 1. Objectif
+## 1. Goal
 
-Disposer d'une API applicative réelle, qui servira de source de logs et de métriques pour toutes les phases suivantes (observabilité, ML, alerting).
+Have a real application API that will serve as the source of logs and metrics for all later phases (observability, ML, alerting).
 
-**Definition of Done (PRD) :**
-> API tourne en local, génère des logs JSON structurés contenant timestamp, level, message, context.
+**Definition of Done (PRD):**
+> API runs locally and produces structured JSON logs containing timestamp, level, message, context.
 
-## 2. Livrables
+## 2. Deliverables
 
-- API REST **NestJS** dans `apps/backend`, avec un CRUD complet pour l'entité du domaine « taskmanager ».
-- Accès aux données via **Prisma** (ORM) sur **PostgreSQL** ; la base s'appelle `taskmanager`.
-- Configuration de la connexion par la variable d'environnement `DATABASE_URL`.
-- Logger structuré JSON (`timestamp`, `level`, `message`, `context`), demandé par la DoD du PRD.
+- **NestJS** REST API in `apps/backend`, with a full CRUD for the "taskmanager" domain entity.
+- Data access through **Prisma** (ORM) on **PostgreSQL**; the database is named `taskmanager`.
+- Connection configured through the `DATABASE_URL` environment variable.
+- Structured JSON logger (`timestamp`, `level`, `message`, `context`), required by the PRD's DoD.
 
-## 3. Évolutions ultérieures du backend
+## 3. Later backend changes
 
-| Phase | Ajout |
+| Phase | Addition |
 |---|---|
-| 1 / 6 | Logs JSON structurés sur `stdout` (`nestjs-pino`), prévus dès la phase 1 par le PRD et exploités par Alloy et Loki en phase 6 |
-| 8 | Module `Anomalies` (CRUD + faux positif), migration Prisma, contrainte d'unicité sur `windowStart` |
-| 9 | Endpoint `/metrics` (compteur et histogramme HTTP Prometheus) |
-| 10 | Filtres, pagination, statistiques et détail des anomalies |
+| 1 / 6 | Structured JSON logs on `stdout` (`nestjs-pino`), planned from phase 1 by the PRD and consumed by Alloy and Loki in phase 6 |
+| 8 | `Anomalies` module (CRUD + false positive), Prisma migration, unique constraint on `windowStart` |
+| 9 | `/metrics` endpoint (Prometheus HTTP counter and histogram) |
+| 10 | Filters, pagination, statistics and detail view for anomalies |
 
-## 4. Leçon retenue
+## 4. Lesson learned
 
-Le projet a d'abord été développé sous Windows puis poursuivi sous Linux : les fins de ligne (CRLF → LF) et le `package-lock.json` ont dû être normalisés (voir phase 3).
+The project was first developed on Windows and then continued on Linux: line endings (CRLF → LF) and `package-lock.json` had to be normalised (see phase 3).

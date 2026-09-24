@@ -1,30 +1,30 @@
-# Phase 7 — Service ML (Isolation Forest)
+# Phase 7 — ML service (Isolation Forest)
 
-**Statut :** ✅ Terminée
-**Période :** 16 septembre 2026 (commits `1ca3ba0` à `1957a15` ; PR #6)
+**Status:** ✅ Done
+**Period:** 16 September 2026 (commits `1ca3ba0` to `1957a15`; PR #6)
 
-## 1. Objectif
+## 1. Goal
 
-Construire le service Python qui détecte les comportements anormaux à partir de fenêtres de logs, avant de le brancher sur Loki (phase 8).
+Build the Python service that detects abnormal behaviour from windows of logs, before connecting it to Loki (phase 8).
 
-**Definition of Done (PRD) :**
-> Service ML local répond sur `/predict` avec un score d'anomalie cohérent, précision > 80 %.
+**Definition of Done (PRD):**
+> Local ML service responds on `/predict` with a consistent anomaly score, accuracy > 80%.
 
-## 2. Livrables
+## 2. Deliverables
 
-Service FastAPI dans `apps/ml-service` :
+FastAPI service in `apps/ml-service`:
 
-- **Feature engineering** avec pandas (environnement virtuel dédié) : transformation des logs en features numériques par fenêtre.
-- **Entraînement d'un Isolation Forest** (scikit-learn) : **94,44 % de précision** face à la vérité terrain d'un jeu de test, au-dessus du seuil de 80 % fixé par le PRD.
-- **Endpoint `/predict`** qui renvoie un score et un verdict d'anomalie.
-- **Dockerfile** et `.dockerignore` ; image `aiops-ml-service:dev`, construite et testée.
+- **Feature engineering** with pandas (dedicated virtual environment): turning logs into numeric features per window.
+- **Isolation Forest training** (scikit-learn): **94.44% accuracy** against the ground truth of a test set, above the 80% threshold set by the PRD.
+- **`/predict` endpoint** that returns a score and an anomaly verdict.
+- **Dockerfile** and `.dockerignore`; image `aiops-ml-service:dev`, built and tested.
 
-## 3. Points d'attention
+## 3. Points of attention
 
-- Le `StandardScaler` a généré un `UserWarning` corrigé dans le même lot.
-- Le modèle (`model/*.joblib`) est ignoré par git ; il a ensuite dû être embarqué explicitement dans l'image (phase 9, commit `eebff9f`).
-- L'image est locale : elle est chargée dans le cluster avec `kind load docker-image`.
+- The `StandardScaler` raised a `UserWarning`, fixed in the same batch.
+- The model (`model/*.joblib`) is ignored by git; it later had to be embedded explicitly in the image (phase 9, commit `eebff9f`).
+- The image is local: it is loaded into the cluster with `kind load docker-image`.
 
-## 4. Suite
+## 4. Next
 
-La phase 8 branche le service sur Loki, avec une boucle de polling continue et l'envoi des anomalies au backend : voir [phase-8-ml-loki-integration.md](phase-8-ml-loki-integration.md).
+Phase 8 connects the service to Loki, with a continuous polling loop and anomalies sent to the backend: see [phase-8-ml-loki-integration.md](phase-8-ml-loki-integration.md).
