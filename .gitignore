@@ -28,3 +28,6 @@ kubeconfig*.yaml
 *.tfstate
 *.tfstate.*
 desktop.ini
+
+# Secrets Kubernetes réels (utiliser les .example comme modèle)
+infra/k8s/base/*/secret.yaml

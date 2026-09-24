@@ -133,6 +133,8 @@ kubectl create secret generic alertmanager-slack-webhook -n observability \
 
 `postgres-service` est le Service headless de PostgreSQL dans le namespace `aiops`. Le mot de passe doit être identique dans les trois valeurs.
 
+Des modèles sont fournis dans `infra/k8s/base/postgres/secret.yaml.example` et `infra/k8s/base/api/secret.yaml.example` : tu peux les copier en `secret.yaml` (ignoré par git), remplir les valeurs et les appliquer à la place des commandes ci-dessus.
+
 Le Secret `grafana` (identifiants admin) est généré par le chart Helm.
 
 ### 4. Base de données et backend
