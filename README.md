@@ -5,11 +5,11 @@
 [![ML Service CI](https://github.com/AbdelKarim-Ensi/AiOps/actions/workflows/ml-service-ci.yml/badge.svg)](https://github.com/AbdelKarim-Ensi/AiOps/actions/workflows/ml-service-ci.yml)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
-Plateforme d'observabilité avec détection d'anomalies sur les logs, déployée sur Kubernetes (kind) et entièrement reproductible : les logs JSON de l'API NestJS sont collectés par Grafana Alloy, stockés dans Loki, analysés toutes les 10 secondes par un service ML (Isolation Forest sur des fenêtres de 5 minutes), puis affichés dans un dashboard Angular. Prometheus, Grafana et Alertmanager (notifications Slack) complètent la boucle.
+An observability platform with log anomaly detection, deployed on Kubernetes (kind) and fully reproducible: JSON logs from the NestJS API are collected by Grafana Alloy, stored in Loki, analysed every 10 seconds by an ML service (Isolation Forest on 5-minute windows), and displayed in an Angular dashboard. Prometheus, Grafana and Alertmanager (Slack notifications) close the loop.
 
-Projet d'apprentissage DevOps piloté par un [PRD](docs/PRD.pdf), avancé phase par phase avec une Definition of Done stricte.
+A DevOps learning project driven by a [PRD](docs/PRD.pdf) and built phase by phase, each with a strict Definition of Done.
 
-## Aperçu
+## Overview
 
 | Dashboard | Anomalies | Grafana |
 |---|---|---|
@@ -19,13 +19,13 @@ Projet d'apprentissage DevOps piloté par un [PRD](docs/PRD.pdf), avancé phase 
 
 ```mermaid
 flowchart LR
-    U[Utilisateur] --> ING[Ingress Nginx]
-    ING -- "/" --> FE[Frontend Angular]
-    ING -- "/api" --> API[Backend NestJS]
+    U[User] --> ING[Ingress Nginx]
+    ING -- "/" --> FE[Angular frontend]
+    ING -- "/api" --> API[NestJS backend]
     API --> PG[(PostgreSQL)]
-    API -- logs JSON --> ALLOY[Grafana Alloy]
+    API -- JSON logs --> ALLOY[Grafana Alloy]
     ALLOY --> LOKI[(Loki)]
-    ML[ML service FastAPI] -- "poll 10 s" --> LOKI
+    ML[FastAPI ML service] -- "poll 10 s" --> LOKI
     ML -- anomalies --> API
     FE -- "/api" --> API
     PROM[Prometheus] -- scrape --> API
@@ -34,24 +34,24 @@ flowchart LR
     GRAF --> LOKI
 ```
 
-## Stack technique
+## Tech stack
 
-| Couche | Technologies |
+| Layer | Technologies |
 |---|---|
-| Backend | NestJS, Prisma, PostgreSQL, logs JSON structurés |
-| Collecte de logs | Grafana Alloy → Loki |
-| ML | FastAPI, scikit-learn (Isolation Forest), polling Loki toutes les 10 s, fenêtres de 5 min |
-| Frontend | Angular (standalone components, signals), Tailwind, Lucide ; routes `/dashboard`, `/anomalies`, `/anomalies/:id` |
-| Métriques et alertes | Prometheus (chart `prometheus-community/prometheus` v29.31.1), Grafana, Alertmanager, Slack |
-| Infra | Docker (multi-stage), Kubernetes (kind), Terraform, Helm |
-| CI/CD | GitHub Actions, runner self-hosted pour le déploiement |
+| Backend | NestJS, Prisma, PostgreSQL, structured JSON logs |
+| Log collection | Grafana Alloy → Loki |
+| ML | FastAPI, scikit-learn (Isolation Forest), Loki polling every 10 s, 5-minute windows |
+| Frontend | Angular (standalone components, signals), Tailwind, Lucide; routes `/dashboard`, `/anomalies`, `/anomalies/:id` |
+| Metrics and alerting | Prometheus (chart `prometheus-community/prometheus` v29.31.1), Grafana, Alertmanager, Slack |
+| Infrastructure | Docker (multi-stage), Kubernetes (kind), Terraform, Helm |
+| CI/CD | GitHub Actions, self-hosted runner for deployment |
 
-## Structure du repo
+## Repository structure
 
 ```
 .
 ├── apps/
-│   ├── backend/          # API NestJS + Prisma
+│   ├── backend/          # NestJS + Prisma API
 │   ├── frontend/         # Angular
 │   └── ml-service/       # FastAPI + scikit-learn
 ├── infra/
@@ -62,34 +62,34 @@ flowchart LR
 │       ├── base/                   # api, postgres, ml-service, frontend, ingress
 │       └── observability/          # loki, grafana-alloy, grafana (+ dashboards),
 │                                   # prometheus, alertmanager, install.sh
-├── docs/architecture/    # documentation détaillée par phase
-├── docker-compose.yml    # lancement local de l'API et de PostgreSQL (phase 2)
-└── .github/workflows/    # CI/CD par service
+├── docs/architecture/    # detailed documentation per phase
+├── docker-compose.yml    # local run of the API and PostgreSQL (phase 2)
+└── .github/workflows/    # per-service CI/CD
 ```
 
-## Prérequis
+## Prerequisites
 
-Versions utilisées pendant le développement :
+Versions used during development:
 
-| Outil | Version |
+| Tool | Version |
 |---|---|
 | Docker Desktop | 29.7.2 |
 | kind | 0.24.0 |
 | kubectl | 1.37.0 |
 | Terraform | 1.9.5 (provider `tehcyx/kind`) |
 | Helm | 3.22.0 |
-| Node.js | 24.21.0 en local ; 20 (backend) et 22 (frontend) dans la CI |
-| Python | 3.12.3 (build local) |
+| Node.js | 24.21.0 locally; 20 (backend) and 22 (frontend) in CI |
+| Python | 3.12.3 (local build) |
 
-Il faut aussi :
+You also need:
 
-- un runner GitHub Actions self-hosted actif sur la machine (voir plus bas) ;
-- un webhook Slack entrant pour les alertes ;
-- un PAT GitHub avec les scopes `repo` **et** `workflow` (sinon les push vers `.github/workflows/` sont refusés).
+- an active self-hosted GitHub Actions runner on your machine (see below);
+- an incoming Slack webhook for alerts;
+- a GitHub PAT with both the `repo` **and** `workflow` scopes (otherwise pushes to `.github/workflows/` are rejected).
 
-## Déploiement de zéro
+## Deploy from scratch
 
-> Avant tout : `kind get clusters`. Si un ancien cluster traîne, supprime-le (`kind delete cluster --name <nom>`). Deux clusters kind simultanés cassent la résolution DNS et bloquent les pulls d'images.
+> Before anything else, run `kind get clusters`. If an old cluster is lying around, delete it (`kind delete cluster --name <name>`). Two kind clusters running at the same time break DNS resolution and block image pulls.
 
 ### 1. Cluster (Terraform)
 
@@ -99,9 +99,9 @@ terraform init
 terraform apply
 ```
 
-Terraform crée uniquement le cluster kind `aiops-cluster-tf` (provider `tehcyx/kind`). Tout le reste est déployé avec `kubectl` et `helm`.
+Terraform only creates the kind cluster `aiops-cluster-tf` (provider `tehcyx/kind`). Everything else is deployed with `kubectl` and `helm`.
 
-### 2. Ingress Nginx et namespaces
+### 2. Ingress Nginx and namespaces
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/kind/deploy.yaml
@@ -111,33 +111,33 @@ kubectl create namespace aiops --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-### 3. Secrets (créés à la main, jamais versionnés)
+### 3. Secrets (created by hand, never committed)
 
-| Secret | Namespace | Rôle |
+| Secret | Namespace | Purpose |
 |---|---|---|
-| `postgres-secret` | `aiops` | Clés `DATABASE_URL` et `POSTGRES_PASSWORD` |
-| `api-secret` | `aiops` | Clé `DATABASE_URL` (utilisée par Prisma) |
-| `alertmanager-slack-webhook` | `observability` | Clé `webhook_url` |
+| `postgres-secret` | `aiops` | Keys `DATABASE_URL` and `POSTGRES_PASSWORD` |
+| `api-secret` | `aiops` | Key `DATABASE_URL` (used by Prisma) |
+| `alertmanager-slack-webhook` | `observability` | Key `webhook_url` |
 
 ```bash
 kubectl create secret generic postgres-secret -n aiops \
-  --from-literal=POSTGRES_PASSWORD='<MOT_DE_PASSE>' \
-  --from-literal=DATABASE_URL='postgresql://postgres:<MOT_DE_PASSE>@postgres-service.aiops.svc.cluster.local:5432/taskmanager'
+  --from-literal=POSTGRES_PASSWORD='<PASSWORD>' \
+  --from-literal=DATABASE_URL='postgresql://postgres:<PASSWORD>@postgres-service.aiops.svc.cluster.local:5432/taskmanager'
 
 kubectl create secret generic api-secret -n aiops \
-  --from-literal=DATABASE_URL='postgresql://postgres:<MOT_DE_PASSE>@postgres-service.aiops.svc.cluster.local:5432/taskmanager'
+  --from-literal=DATABASE_URL='postgresql://postgres:<PASSWORD>@postgres-service.aiops.svc.cluster.local:5432/taskmanager'
 
 kubectl create secret generic alertmanager-slack-webhook -n observability \
-  --from-literal=webhook_url='<URL_WEBHOOK_SLACK>'
+  --from-literal=webhook_url='<SLACK_WEBHOOK_URL>'
 ```
 
-`postgres-service` est le Service headless de PostgreSQL dans le namespace `aiops`. Le mot de passe doit être identique dans les trois valeurs.
+`postgres-service` is the headless PostgreSQL Service in the `aiops` namespace. The password must be identical in all three values.
 
-Des modèles sont fournis dans `infra/k8s/base/postgres/secret.yaml.example` et `infra/k8s/base/api/secret.yaml.example` : tu peux les copier en `secret.yaml` (ignoré par git), remplir les valeurs et les appliquer à la place des commandes ci-dessus.
+Templates are provided in `infra/k8s/base/postgres/secret.yaml.example` and `infra/k8s/base/api/secret.yaml.example`: you can copy them to `secret.yaml` (ignored by git), fill in the values and apply them instead of the commands above.
 
-Le Secret `grafana` (identifiants admin) est généré par le chart Helm.
+The `grafana` Secret (admin credentials) is generated by the Helm chart.
 
-### 4. Base de données et backend
+### 4. Database and backend
 
 ```bash
 kubectl apply -f infra/k8s/base/postgres/
@@ -146,19 +146,19 @@ kubectl apply -f infra/k8s/base/api/
 kubectl rollout status deployment/api -n aiops --timeout=300s
 ```
 
-Le ConfigMap `postgres-config` fixe `POSTGRES_DB=taskmanager` et `POSTGRES_USER=postgres`. L'image du backend vient de `ghcr.io/abdelkarim-ensi/aiops-backend:latest`.
+The `postgres-config` ConfigMap sets `POSTGRES_DB=taskmanager` and `POSTGRES_USER=postgres`. The backend image comes from `ghcr.io/abdelkarim-ensi/aiops-backend:latest`.
 
-### 5. Observabilité (Loki, Alloy, Grafana)
+### 5. Observability (Loki, Alloy, Grafana)
 
 ```bash
 ./infra/k8s/observability/install.sh
 ```
 
-Le script fait `helm upgrade --install` de `loki`, `alloy` et `grafana` (repo `grafana/*`). Les dashboards Grafana sont dans `infra/k8s/observability/grafana/dashboards` (voir `docs/architecture/phase-9-prometheus-grafana.md`).
+The script runs `helm upgrade --install` for `loki`, `alloy` and `grafana` (`grafana/*` repo). Grafana dashboards live in `infra/k8s/observability/grafana/dashboards` (see `docs/architecture/phase-9-prometheus-grafana.md`).
 
-### 6. Service ML
+### 6. ML service
 
-Le manifest référence l'image locale `aiops-ml-service:dev` : pour l'installation initiale, construis-la et charge-la dans le cluster. Ensuite, la CI publie l'image sur GHCR et met à jour le Deployment avec le tag SHA du commit, sans nouveau `kind load`.
+The manifest references the local image `aiops-ml-service:dev`: for the initial install, build it and load it into the cluster. Afterwards, CI publishes the image to GHCR and updates the Deployment with the commit SHA tag, with no further `kind load`.
 
 ```bash
 docker build -t aiops-ml-service:dev apps/ml-service
@@ -166,18 +166,18 @@ kind load docker-image aiops-ml-service:dev --name aiops-cluster-tf
 kubectl apply -f infra/k8s/base/ml-service/
 ```
 
-Configuration via le ConfigMap `ml-service-config` :
+Configuration comes from the `ml-service-config` ConfigMap:
 
-| Variable | Valeur |
+| Variable | Value |
 |---|---|
 | `LOKI_URL` | `http://loki.observability.svc.cluster.local:3100` |
 | `LOKI_TENANT_ID` | `aiops` |
 | `LOKI_QUERY` | `{namespace="aiops", container="api"}` |
 | `BACKEND_URL` | `http://api-service.aiops.svc.cluster.local:3000` |
 
-### 7. Prometheus et Alertmanager (manuel, hors CI)
+### 7. Prometheus and Alertmanager (manual, outside CI)
 
-Le Secret `alertmanager-slack-webhook` (étape 3) doit exister avant l'installation : Alertmanager le monte pour lire l'URL du webhook.
+The `alertmanager-slack-webhook` Secret (step 3) must exist before installing: Alertmanager mounts it to read the webhook URL.
 
 ```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
@@ -189,27 +189,27 @@ helm upgrade --install prometheus prometheus-community/prometheus -n observabili
   -f values-prometheus.yaml -f values-alertmanager.yaml
 ```
 
-Ce chart n'est pas `kube-prometheus-stack` : il n'y a pas de CRD `PrometheusRule`, les règles d'alerte sont dans les values (`serverFiles.alerting_rules.yml`). La règle `AnomalyScoreHigh` se déclenche quand `ml_anomaly_score_latest > 0.7` (sévérité `critical`) et notifie Slack. Détails : `docs/architecture/phase-9-prometheus-grafana.md` et `docs/architecture/phase-11-alerting.md`. Ce déploiement ne passe pas par la CI.
+This chart is not `kube-prometheus-stack`: there is no `PrometheusRule` CRD, so alert rules live in the values (`serverFiles.alerting_rules.yml`). The `AnomalyScoreHigh` rule fires when `ml_anomaly_score_latest > 0.7` (severity `critical`) and notifies Slack. Details: `docs/architecture/phase-9-prometheus-grafana.md` and `docs/architecture/phase-11-alerting.md`. This deployment does not go through CI.
 
-### 8. Frontend et Ingress
+### 8. Frontend and Ingress
 
 ```bash
 kubectl apply -f infra/k8s/base/frontend/
 kubectl apply -f infra/k8s/base/ingress/
 ```
 
-Deux objets Ingress coexistent sur le host `localhost` : `/` vers `frontend-service` et `/api` vers `api-service`, avec réécriture du préfixe uniquement pour `/api`. L'annotation `rewrite-target` s'applique à tout un objet Ingress, d'où la séparation ; ingress-nginx fusionne les deux (voir `docs/architecture/phase-10-frontend-dashboard.md`).
+Two Ingress objects share the `localhost` host: `/` goes to `frontend-service` and `/api` to `api-service`, with prefix rewriting for `/api` only. The `rewrite-target` annotation applies to a whole Ingress object, hence the split; ingress-nginx merges the two (see `docs/architecture/phase-10-frontend-dashboard.md`).
 
-### 9. Vérification
+### 9. Verification
 
 ```bash
 kubectl get pods -A
 curl -I http://localhost/
 ```
 
-Tous les pods des namespaces `aiops`, `observability` et `ingress-nginx` doivent être `Running` / `Ready`.
+All pods in the `aiops`, `observability` and `ingress-nginx` namespaces must be `Running` / `Ready`.
 
-## Accès
+## Access
 
 | Service | URL |
 |---|---|
@@ -221,51 +221,51 @@ Tous les pods des namespaces `aiops`, `observability` et `ingress-nginx` doivent
 
 ## CI/CD
 
-Un workflow par service (`backend`, `frontend`, `ml-service`) dans `.github/workflows/`, sur le schéma `lint/build/test → docker-build-push → deploy`.
+One workflow per service (`backend`, `frontend`, `ml-service`) in `.github/workflows/`, following the `lint/build/test → docker-build-push → deploy` pattern.
 
-- Les images sont poussées sur GHCR avec deux tags : `latest` et le SHA du commit.
-- Le job `deploy` tourne sur un runner self-hosted : il fait `kubectl set image` (pour le backend, après avoir appliqué les migrations Prisma dans un pod éphémère) avec le **tag SHA**, ce qui rend chaque déploiement traçable et réversible (`kubectl rollout undo`). Le tag `latest` des manifests ne sert qu'à l'installation initiale.
-- Secret GitHub requis : `DATABASE_URL` (utilisé pour la migration Prisma).
+- Images are pushed to GHCR with two tags: `latest` and the commit SHA.
+- The `deploy` job runs on a self-hosted runner: it runs `kubectl set image` (for the backend, after applying Prisma migrations in an ephemeral pod) with the **SHA tag**, which makes every deployment traceable and reversible (`kubectl rollout undo`). The `latest` tag in the manifests is only used for the initial install.
+- Required GitHub secret: `DATABASE_URL` (used for the Prisma migration).
 
-Le runner doit être lancé et rester actif, sinon les jobs `deploy` restent en attente :
+The runner must be started and stay active, otherwise `deploy` jobs stay queued:
 
 ```bash
 cd ~/Projects/actions-runner && ./run.sh
 ```
 
-## Documentation détaillée
+## Detailed documentation (in French)
 
-- [Phase 1 : backend NestJS + Prisma](docs/architecture/phase-1-backend-nestjs-prisma.md)
-- [Phase 2 : dockerisation](docs/architecture/phase-2-dockerisation.md)
-- [Phase 3 : CI GitHub Actions](docs/architecture/phase-3-ci-github-actions.md)
-- [Phase 4 : cluster kind et Terraform](docs/architecture/phase-4-kind-terraform.md)
-- [Phase 5 : déploiement Kubernetes](docs/architecture/phase-5-k8s-deploy.md)
-- [Phase 6 : observabilité](docs/architecture/phase-6-observability.md)
-- [Phase 7 : service ML](docs/architecture/phase-7-ml-service.md)
-- [Phase 8 : intégration ML / Loki](docs/architecture/phase-8-ml-loki-integration.md)
-- [Phase 9 : Prometheus et Grafana](docs/architecture/phase-9-prometheus-grafana.md)
-- [Phase 10 : dashboard frontend](docs/architecture/phase-10-frontend-dashboard.md)
-- [Phase 11 : alerting](docs/architecture/phase-11-alerting.md)
+- [Phase 1: NestJS + Prisma backend](docs/architecture/phase-1-backend-nestjs-prisma.md)
+- [Phase 2: containerisation](docs/architecture/phase-2-dockerisation.md)
+- [Phase 3: GitHub Actions CI](docs/architecture/phase-3-ci-github-actions.md)
+- [Phase 4: kind cluster and Terraform](docs/architecture/phase-4-kind-terraform.md)
+- [Phase 5: Kubernetes deployment](docs/architecture/phase-5-k8s-deploy.md)
+- [Phase 6: observability](docs/architecture/phase-6-observability.md)
+- [Phase 7: ML service](docs/architecture/phase-7-ml-service.md)
+- [Phase 8: ML / Loki integration](docs/architecture/phase-8-ml-loki-integration.md)
+- [Phase 9: Prometheus and Grafana](docs/architecture/phase-9-prometheus-grafana.md)
+- [Phase 10: frontend dashboard](docs/architecture/phase-10-frontend-dashboard.md)
+- [Phase 11: alerting](docs/architecture/phase-11-alerting.md)
 
-## Dépannage
+## Troubleshooting
 
-- **Erreurs DNS / pulls d'images bloqués** : vérifier `kind get clusters` et supprimer les clusters en double.
-- **`kind load docker-image` échoue** (digest de manifest multi-plateforme) : faire un `crictl pull` directement dans le nœud une fois le DNS stable.
-- **Tag PostgreSQL** : utiliser `postgres:15-alpine` (le tag `-amd64` n'existe pas).
-- **Secret introuvable** : le nom du Secret doit être identique dans le manifest de Secret et dans le `secretRef` du Deployment.
-- **`extraScrapeConfigs` sans effet** : la clé doit être à la racine du values Prometheus, pas sous `server:`.
+- **DNS errors / stuck image pulls**: check `kind get clusters` and delete duplicate clusters.
+- **`kind load docker-image` fails** (multi-platform manifest digest): run `crictl pull` directly inside the node once DNS is stable.
+- **PostgreSQL tag**: use `postgres:15-alpine` (the `-amd64` tag does not exist).
+- **Secret not found**: the Secret name must be identical in the Secret manifest and in the Deployment's `secretRef`.
+- **`extraScrapeConfigs` has no effect**: the key must be at the root of the Prometheus values, not under `server:`.
 
-## Limites connues
+## Known limitations
 
-- Pas de LLM : la détection repose uniquement sur un Isolation Forest.
-- Pas de multi-cloud : cluster local kind uniquement.
-- Pas d'authentification OAuth.
-- Seuil d'alerte fixé à **0.7** au lieu des 0.8 du PRD : 0.8 n'est jamais atteint sur l'échelle réelle du modèle (calibration détaillée dans la phase 11).
-- Déploiement de l'observabilité et création des Secrets manuels, hors CI.
-- Le manifest du service ML référence une image locale (`aiops-ml-service:dev`) pour l'installation initiale ; la CI de ce service ne fait qu'une vérification syntaxique (`py_compile`), sans tests unitaires.
+- No LLM: detection relies solely on an Isolation Forest.
+- No multi-cloud: local kind cluster only.
+- No OAuth authentication.
+- Alert threshold set to **0.7** instead of the PRD's 0.8: 0.8 is never reached on the model's actual score scale (calibration detailed in phase 11).
+- Observability deployment and Secret creation are manual, outside CI.
+- The ML service manifest references a local image (`aiops-ml-service:dev`) for the initial install; that service's CI only performs a syntax check (`py_compile`), with no unit tests.
 
 ## Contact
 
 Abdel Karim Doudey, [@AbdelKarim-Ensi](https://github.com/AbdelKarim-Ensi)
 
-Licence : [MIT](LICENSE)
+License: [MIT](LICENSE)
