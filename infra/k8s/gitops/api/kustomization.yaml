@@ -1,7 +1,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../base/api
+- ../../base/api
 images:
-  - name: ghcr.io/abdelkarim-ensi/aiops-backend
-    newTag: latest
+- name: ghcr.io/abdelkarim-ensi/aiops-backend
+  newName: ghcr.io/abdelkarim-ensi/aiops-backend
+  newTag: 27250b3e8e90c8faa06e8c2f7649e7565da2a161
