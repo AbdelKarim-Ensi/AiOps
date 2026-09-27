@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: ml-service
-          image: aiops-ml-service:dev   
+          image: ghcr.io/abdelkarim-ensi/aiops-ml-service:dev   
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8001
