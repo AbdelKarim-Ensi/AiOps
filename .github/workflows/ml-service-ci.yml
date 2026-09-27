@@ -6,6 +6,8 @@ on:
     paths:
       - "apps/ml-service/**"
       - ".github/workflows/ml-service-ci.yml"
+    paths-ignore:
+      - "infra/k8s/gitops/**"
   pull_request:
     branches: [main]
     paths:
@@ -75,12 +77,31 @@ jobs:
             ${{ steps.vars.outputs.image_name }}:latest
             ${{ steps.vars.outputs.image_name }}:${{ github.sha }}
 
-  deploy:
+  update-gitops-manifest:
     needs: docker-build-push
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
-      - name: Redéployer sur le cluster kind
+      - name: Checkout du code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Installer kustomize
         run: |
-          kubectl set image deployment/ml-service ml-service=${{ needs.docker-build-push.outputs.image_name }}:${{ github.sha }} -n aiops
-          kubectl rollout status deployment/ml-service -n aiops --timeout=600s
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Patch du tag d'image
+        working-directory: infra/k8s/gitops/ml-service
+        run: kustomize edit set image ${{ needs.docker-build-push.outputs.image_name }}=${{ needs.docker-build-push.outputs.image_name }}:${{ github.sha }}
+
+      - name: Commit et push sur main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add infra/k8s/gitops/ml-service/kustomization.yaml
+          git commit -m "chore(gitops): update ml-service image to ${{ github.sha }} [skip ci]" || echo "Rien à committer"
+          git push origin HEAD:main
