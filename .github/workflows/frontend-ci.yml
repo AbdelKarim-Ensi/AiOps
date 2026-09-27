@@ -97,10 +97,22 @@ jobs:
         working-directory: infra/k8s/gitops/frontend
         run: kustomize edit set image ${{ needs.docker-build-push.outputs.image_name }}=${{ needs.docker-build-push.outputs.image_name }}:${{ github.sha }}
 
-      - name: Commit et push sur main
+      - name: Commit et push sur main (avec retry en cas de conflit)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add infra/k8s/gitops/frontend/kustomization.yaml
           git commit -m "chore(gitops): update frontend image to ${{ github.sha }} [skip ci]" || echo "Rien à committer"
-          git push origin HEAD:main
+
+          for i in $(seq 1 10); do
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              echo "Push réussi (tentative $i)"
+              break
+            fi
+            if [ $i -eq 10 ]; then
+              echo "::error::Échec du push après 10 tentatives"
+              exit 1
+            fi
+            echo "Push échoué, tentative $i/10, nouvelle tentative..."
+            sleep $((RANDOM % 8 + 2))
+          done
