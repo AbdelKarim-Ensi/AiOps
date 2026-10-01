@@ -10,6 +10,8 @@ on:
     branches: [main]
     paths:
       - "apps/frontend/**"
+      # AJOUT : Phase 14 - tester le workflow depuis une PR qui ne touche que .github/
+      - ".github/workflows/frontend-ci.yml"
 
 jobs:
   build-test:
@@ -38,8 +40,54 @@ jobs:
       - name: Tests unitaires
         run: npm test -- --no-watch
 
-  docker-build-push:
+  # AJOUT : Phase 14 - scan CVE de l'image, sur PR et sur push, sans rien publier
+  image-scan:
     needs: build-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Build local de l'image (sans push)
+        uses: docker/build-push-action@v5
+        with:
+          context: apps/frontend
+          push: false
+          load: true
+          tags: aiops-frontend:scan
+
+      - name: Trivy - rapport complet (non bloquant)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: aiops-frontend:scan
+          format: json
+          output: trivy-frontend-report.json
+          exit-code: "0"
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+
+      - name: Trivy - gate CRITICAL (bloquant)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: aiops-frontend:scan
+          format: table
+          exit-code: "1"
+          severity: CRITICAL
+          ignore-unfixed: true
+
+      - name: Publier le rapport Trivy
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-frontend-report
+          path: trivy-frontend-report.json
+
+  docker-build-push:
+    # AJOUT : Phase 14 - ancienne ligne conservée, remplacée par la ligne suivante
+    # needs: build-test
+    needs: [build-test, image-scan]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
