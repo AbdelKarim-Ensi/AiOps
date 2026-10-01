@@ -24,6 +24,9 @@ ENV NODE_ENV=production
 
 RUN apk add --no-cache openssl
 
+# AJOUT : Phase 14 - corrige CVE-2026-59873 (tar 6.2.1 embarqué dans le npm de l'image de base)
+RUN npm install -g npm@10.9.9 && npm cache clean --force
+
 COPY package.json package-lock.json ./
 
 RUN npm ci --omit=dev --ignore-scripts
