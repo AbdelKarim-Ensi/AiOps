@@ -1,0 +1,9 @@
+# AJOUT : config Gitleaks Phase 14
+title = "AiOps gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fichiers d'exemple sans vrais secrets"
+paths = ['''.*\.example$''']
